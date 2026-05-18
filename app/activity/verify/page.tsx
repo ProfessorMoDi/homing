@@ -2,16 +2,56 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, IdCard, Camera } from "lucide-react";
+import {
+  ShieldCheck,
+  IdCard,
+  Camera,
+  Clock,
+  Check,
+  Lock,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CheckRow, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
+import { formatDayTime } from "@/lib/formatActivity";
+
+type Method = "idin" | "id";
+
+interface MethodOption {
+  id: Method;
+  icon: React.ReactNode;
+  iconBgClass: string;
+  title: string;
+  subtitle: string;
+  duration: string;
+  badge?: string;
+}
+
+const METHODS: MethodOption[] = [
+  {
+    id: "idin",
+    icon: <IdCard size={22} />,
+    iconBgClass: "bg-[var(--color-sky-soft)] text-[#3b5a73]",
+    title: "iDIN",
+    subtitle: "Verify through your Dutch bank",
+    duration: "~30 seconds",
+    badge: "Fastest",
+  },
+  {
+    id: "id",
+    icon: <Camera size={22} />,
+    iconBgClass: "bg-[var(--color-sand)] text-[#6a5326]",
+    title: "ID + selfie",
+    subtitle: "Document scan on this device",
+    duration: "~1 minute · auto-deleted after",
+  },
+];
 
 export default function Verify() {
   const router = useRouter();
   const { state, verifyUser } = useApp();
   const a = state.activity;
-  const [method, setMethod] = useState<"idin" | "id" | null>(null);
+  const [method, setMethod] = useState<Method | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -29,13 +69,13 @@ export default function Verify() {
       <Card className="mb-5">
         <p className="display text-[19px]">{a.title}</p>
         <p className="text-[13px] text-[var(--color-muted)] mt-1">
-          {a.day} {a.time} · {a.group_size_target} people
+          {formatDayTime(a.day, a.time)} · {a.group_size_target} people
         </p>
       </Card>
 
       <Card className="mb-5">
         <div className="flex items-start gap-3">
-          <span className="grid place-items-center h-9 w-9 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]">
+          <span className="grid place-items-center h-9 w-9 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
             <ShieldCheck size={16} />
           </span>
           <div>
@@ -75,42 +115,74 @@ export default function Verify() {
         </p>
       </Card>
 
+      <p className="text-[11.5px] uppercase tracking-wider text-[var(--color-muted)] font-medium mb-2 px-1">
+        Choose how to verify
+      </p>
       <div className="grid gap-2.5 mb-5">
-        <button
-          onClick={() => setMethod("idin")}
-          className={
-            "card text-left flex items-center gap-3 " +
-            (method === "idin" ? "ring-2 ring-[var(--color-ink)]" : "")
-          }
-        >
-          <span className="grid place-items-center h-9 w-9 rounded-full bg-[var(--color-sky-soft)] text-[#3b5a73]">
-            <IdCard size={16} />
-          </span>
-          <div className="flex-1">
-            <p className="text-[14px] font-medium">Verify with iDIN</p>
-            <p className="text-[12.5px] text-[var(--color-muted)]">
-              Via your Dutch bank · fastest
-            </p>
-          </div>
-        </button>
-        <button
-          onClick={() => setMethod("id")}
-          className={
-            "card text-left flex items-center gap-3 " +
-            (method === "id" ? "ring-2 ring-[var(--color-ink)]" : "")
-          }
-        >
-          <span className="grid place-items-center h-9 w-9 rounded-full bg-[var(--color-sand)] text-[#6a5326]">
-            <Camera size={16} />
-          </span>
-          <div className="flex-1">
-            <p className="text-[14px] font-medium">Verify with ID + selfie</p>
-            <p className="text-[12.5px] text-[var(--color-muted)]">
-              Checked on device · auto-deleted after
-            </p>
-          </div>
-        </button>
+        {METHODS.map((opt) => {
+          const selected = method === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setMethod(opt.id)}
+              aria-pressed={selected}
+              className={
+                "relative flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 " +
+                (selected
+                  ? "border-[var(--color-sage)] bg-[var(--color-sage-soft)] shadow-[0_4px_16px_rgba(79,121,66,0.18)]"
+                  : "border-[var(--color-line)] bg-white hover:border-[var(--color-ink-soft)] hover:bg-[var(--color-cream-warm)] hover:-translate-y-px")
+              }
+            >
+              <span
+                className={
+                  "grid place-items-center h-12 w-12 rounded-2xl shrink-0 transition-transform " +
+                  opt.iconBgClass +
+                  (selected ? " scale-105" : "")
+                }
+              >
+                {opt.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <p className="text-[15.5px] font-semibold leading-tight">
+                    {opt.title}
+                  </p>
+                  {opt.badge && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] text-[10.5px] font-medium uppercase tracking-wider">
+                      {opt.badge}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12.5px] text-[var(--color-ink-soft)]">
+                  {opt.subtitle}
+                </p>
+                <p className="text-[11.5px] text-[var(--color-muted)] mt-1 inline-flex items-center gap-1">
+                  <Clock size={11} />
+                  {opt.duration}
+                </p>
+              </div>
+              <span
+                className={
+                  "h-7 w-7 rounded-full grid place-items-center shrink-0 transition-all " +
+                  (selected
+                    ? "bg-[var(--color-sage)] text-white scale-100"
+                    : "bg-white border-2 border-[var(--color-line)]")
+                }
+                aria-hidden
+              >
+                {selected && (
+                  <Check size={14} strokeWidth={3} className="animate-pop-check" />
+                )}
+              </span>
+            </button>
+          );
+        })}
       </div>
+
+      <p className="text-[11.5px] text-[var(--color-muted)] inline-flex items-center gap-1.5 mb-5 px-1">
+        <Lock size={11} /> Encrypted end-to-end · we never see the document
+      </p>
 
       {!done && (
         <div className="grid gap-2">

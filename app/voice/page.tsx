@@ -6,8 +6,8 @@ import { Mic, Square, Sparkles, AlertCircle, FastForward } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Pigeon, FlyingPigeon } from "@/components/Pigeon";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
-import { ThinkingDots, BreathingOrb } from "@/components/Loading";
 import { useApp } from "@/lib/store";
+import { stashAudio } from "@/lib/audioStash";
 
 function format(secs: number) {
   const m = Math.floor(secs / 60);
@@ -17,11 +17,9 @@ function format(secs: number) {
 
 export default function VoiceOnboarding() {
   const router = useRouter();
-  const { loadSampleVoice, setLiveTranscript, setLiveProfile } = useApp();
+  const { loadSampleVoice } = useApp();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
-  const [progressLabel, setProgressLabel] = useState("Transcribing…");
   const [error, setError] = useState<string | null>(null);
 
   const interval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -47,11 +45,11 @@ export default function VoiceOnboarding() {
     };
   }, []);
 
-  const doneEnabled = seconds >= 90 && !transcribing;
-  const skipEnabled = recording && seconds >= 1 && !transcribing;
+  const doneEnabled = seconds >= 90;
+  const skipEnabled = recording && seconds >= 1;
 
   async function onStart() {
-    if (recording || transcribing) return;
+    if (recording) return;
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -102,66 +100,8 @@ export default function VoiceOnboarding() {
     });
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
-    setTranscribing(true);
-    setProgressLabel("Transcribing…");
-
-    try {
-      const form = new FormData();
-      form.append("audio", blob, "recording.webm");
-      const r = await fetch("/api/transcribe", {
-        method: "POST",
-        body: form,
-      });
-      if (!r.ok) {
-        const detail = await r.text().catch(() => "");
-        throw new Error(detail || `Transcription failed (${r.status})`);
-      }
-      const data = (await r.json()) as { text?: string };
-      const text = (data.text || "").trim();
-      if (!text) {
-        throw new Error("Empty transcript");
-      }
-
-      // Seed the fallback right away so navigation always has *something*.
-      setLiveTranscript(text);
-
-      setProgressLabel("Reading your transcript…");
-      try {
-        const ar = await fetch("/api/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: text, demoMode: force }),
-        });
-        if (ar.ok) {
-          const analysis = (await ar.json()) as {
-            topics: { title: string; explanation: string; tags: string[] }[];
-            minor_interests: string[];
-            languages: string[];
-            activity_types: string[];
-          };
-          if (analysis.topics?.length > 0) {
-            setLiveProfile(text, {
-              topics: analysis.topics,
-              minor_interests: analysis.minor_interests ?? [],
-              languages: analysis.languages ?? [],
-              activity_types: analysis.activity_types ?? [],
-            });
-          }
-        } else {
-          console.warn("Analyze failed, keeping keyword fallback", ar.status);
-        }
-      } catch (e) {
-        console.warn("Analyze threw, keeping keyword fallback", e);
-      }
-
-      router.push("/transcribing?live=1");
-    } catch (e) {
-      console.error(e);
-      setTranscribing(false);
-      setError(
-        "Transcription failed. You can try again or use the sample recording.",
-      );
-    }
+    stashAudio(blob, force);
+    router.push("/transcribing?live=1");
   }
 
   function onSample() {
@@ -184,19 +124,11 @@ export default function VoiceOnboarding() {
 
       <div className="relative h-56 mb-6 overflow-hidden rounded-3xl scrim">
         {recording && <FlyingPigeon />}
-        {transcribing ? (
-          <BreathingOrb>
-            <div className="animate-float">
-              <Pigeon size={120} />
-            </div>
-          </BreathingOrb>
-        ) : (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className={recording ? "animate-float" : ""}>
-              <Pigeon size={120} />
-            </div>
+        <div className="absolute inset-0 grid place-items-center">
+          <div className={recording ? "animate-float" : ""}>
+            <Pigeon size={120} />
           </div>
-        )}
+        </div>
       </div>
 
       <div className="flex flex-col items-center gap-4 mb-6">
@@ -213,21 +145,15 @@ export default function VoiceOnboarding() {
           <button
             aria-label={recording ? "Recording" : "Start recording"}
             onClick={onStart}
-            disabled={recording || transcribing}
+            disabled={recording}
             className={
               "relative grid place-items-center h-24 w-24 rounded-full shadow-[0_8px_28px_rgba(27,29,28,0.18)] transition-transform " +
               (recording
                 ? "bg-[var(--color-sage)] text-white cursor-default"
-                : transcribing
-                  ? "bg-[var(--color-line)] text-[var(--color-muted)] cursor-not-allowed"
-                  : "bg-[var(--color-ink)] text-white active:scale-95")
+                : "bg-[var(--color-ink)] text-white active:scale-95")
             }
           >
-            {transcribing ? (
-              <ThinkingDots className="text-white" />
-            ) : (
-              <Mic size={32} />
-            )}
+            <Mic size={32} />
           </button>
         </div>
 
@@ -236,17 +162,11 @@ export default function VoiceOnboarding() {
             {format(seconds)}
           </div>
           <p className="text-[12.5px] text-[var(--color-muted)] mt-1 inline-flex items-center gap-2 justify-center">
-            {!recording && !transcribing && "Tap to start"}
+            {!recording && "Tap to start"}
             {recording && (
               <>
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-clay)] animate-live-pulse" />
                 Recording…
-              </>
-            )}
-            {transcribing && (
-              <>
-                {progressLabel}
-                <ThinkingDots size="small" />
               </>
             )}
           </p>
@@ -270,17 +190,8 @@ export default function VoiceOnboarding() {
 
       <div className="grid gap-2.5 mb-6">
         <PrimaryButton onClick={() => onDone(false)} disabled={!doneEnabled}>
-          {transcribing ? (
-            <>
-              <ThinkingDots size="small" />
-              {progressLabel}
-            </>
-          ) : (
-            <>
-              <Square size={16} fill="currentColor" />
-              Done
-            </>
-          )}
+          <Square size={16} fill="currentColor" />
+          Done
         </PrimaryButton>
         <button
           type="button"

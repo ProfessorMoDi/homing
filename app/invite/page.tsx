@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, Pill, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
 import { incomingInviteActivity } from "@/lib/matching";
+import { formatDayTime, formatDuration } from "@/lib/formatActivity";
 
 export default function InvitePage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function InvitePage() {
           <Sparkle size={12} /> HOMING match
         </span>
         <p className="display text-[24px] leading-tight mb-1">
-          HOMING found an activity that fits you.
+          Homi found an activity that fits you.
         </p>
         <p className="text-[13.5px] text-[var(--color-muted)]">
           Names and the exact venue are revealed only after everyone verifies.
@@ -35,7 +36,7 @@ export default function InvitePage() {
         <p className="display text-[22px] mb-1">{a.title}</p>
         <div className="grid gap-1.5 text-[13.5px] text-[var(--color-ink-soft)] mt-2">
           <span className="inline-flex items-center gap-2">
-            <Clock size={14} /> {a.day} {a.time} · around {a.duration}
+            <Clock size={14} /> {formatDayTime(a.day, a.time)} · around {formatDuration(a.duration)}
           </span>
           <span className="inline-flex items-center gap-2">
             <Users size={14} /> {a.group_size_target} people · near campus

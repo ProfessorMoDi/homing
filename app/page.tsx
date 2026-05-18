@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
 
@@ -21,7 +22,7 @@ export default function Landing() {
       </div>
 
       <div className="relative flex-1 px-5 pt-10 pb-6 flex flex-col">
-        <div className="relative h-56 mb-8">
+        <div className="relative h-56 mb-3">
           <div className="absolute inset-0 scrim rounded-3xl opacity-90" />
           <div className="absolute inset-0 grid place-items-center">
             <div className="animate-float">
@@ -29,6 +30,11 @@ export default function Landing() {
             </div>
           </div>
         </div>
+
+        <p className="text-[12px] text-[var(--color-muted)] text-center mb-6 inline-flex items-center justify-center gap-1.5">
+          <span className="inline-block h-1 w-1 rounded-full bg-[var(--color-sage)]" />
+          Meet Homi — the pigeon who quietly carries the messages.
+        </p>
 
         <h1 className="display text-[34px] leading-[1.05] text-center px-2">
           Turn what you like into a small real-life activity.
@@ -50,6 +56,15 @@ export default function Landing() {
             Voice is transcribed on your phone. The recording never leaves your
             device.
           </PrivacyNote>
+          <div className="text-center mt-1">
+            <Link
+              href="/voice"
+              className="text-[11.5px] text-[var(--color-muted)] hover:text-[var(--color-ink-soft)] inline-flex items-center gap-1 transition-colors"
+            >
+              Skip signup (demo)
+              <ArrowRight size={11} />
+            </Link>
+          </div>
         </div>
       </div>
     </div>

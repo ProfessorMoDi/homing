@@ -6,14 +6,33 @@ import { AppShell } from "@/components/AppShell";
 import { Card, Avatar, Pill, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { findUser } from "@/lib/data";
+import { formatDayTime, formatDuration } from "@/lib/formatActivity";
 
 const PARTICIPANTS = ["u_franz", "u_lena", "u_sophie"];
+
+function buildWhyLine(tags: string[]): string {
+  const top = tags.filter(Boolean).slice(0, 3);
+  if (top.length === 0) {
+    return "Everyone in the group matched on what you said you wanted to do.";
+  }
+  if (top.length === 1) {
+    return `Everyone matched strongly on ${top[0]}.`;
+  }
+  if (top.length === 2) {
+    return `Everyone matched strongly on ${top[0]} or ${top[1]}.`;
+  }
+  return `Everyone matched strongly on ${top[0]}, ${top[1]}, or ${top[2]}.`;
+}
 
 export default function ActivityDetails() {
   const { state } = useApp();
   const router = useRouter();
   const a = state.activity;
   const participants = ["You", ...PARTICIPANTS.map((id) => findUser(id)?.first_name || "—")];
+  const allTags = [...a.specific_interest_tags, ...a.broader_interest_tags];
+  const whyLine = buildWhyLine(allTags);
+  const summaryLine = a.description || a.note || a.title;
+  const pillTags = allTags.slice(0, 2);
 
   return (
     <AppShell back="/activity/verify" title="Activity details">
@@ -24,7 +43,7 @@ export default function ActivityDetails() {
         <p className="display text-[24px] leading-tight mb-1">{a.title}</p>
         <div className="grid gap-1.5 text-[13.5px] text-[var(--color-ink-soft)] mt-2">
           <span className="inline-flex items-center gap-2">
-            <Clock size={14} /> {a.day} {a.time} · {a.duration}
+            <Clock size={14} /> {formatDayTime(a.day, a.time)} · {formatDuration(a.duration)}
           </span>
           <span className="inline-flex items-center gap-2">
             <MapPin size={14} /> {a.exact_venue}
@@ -56,15 +75,16 @@ export default function ActivityDetails() {
       <Card className="mb-5">
         <p className="text-[13px] font-medium mb-1">Suggested first activity</p>
         <p className="text-[13.5px] text-[var(--color-ink-soft)] mb-3">
-          One game of Catan.
+          {summaryLine}
         </p>
         <p className="text-[13px] font-medium mb-1">Why</p>
         <p className="text-[13.5px] text-[var(--color-ink-soft)] mb-3">
-          Everyone matched strongly on Catan, board games, or strategy games.
+          {whyLine}
         </p>
         <div className="flex flex-wrap gap-1.5">
-          <Pill>Catan</Pill>
-          <Pill>Strategy</Pill>
+          {pillTags.map((t) => (
+            <Pill key={t}>{t}</Pill>
+          ))}
           <Pill>{a.language}</Pill>
         </div>
       </Card>

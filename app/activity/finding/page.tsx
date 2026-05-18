@@ -8,18 +8,31 @@ import { Card, PrimaryButton, Pill } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
 import { BreathingOrb, Progress, ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
+import { formatDayTime } from "@/lib/formatActivity";
 
-const STAGES = [
-  "Looking for exact matches",
-  "Inviting people who mentioned Catan",
-  "Checking board game matches",
-  "Waiting for replies",
-];
+function buildStages(specificTags: string[], broaderTags: string[]): string[] {
+  const primary = specificTags.find(Boolean) || broaderTags.find(Boolean) || "";
+  const secondary =
+    broaderTags.find((t) => t !== primary) ||
+    specificTags.find((t) => t !== primary) ||
+    "";
+  return [
+    "Looking for exact matches",
+    primary
+      ? `Inviting people who mentioned ${primary}`
+      : "Inviting people who said they wanted this",
+    secondary
+      ? `Checking ${secondary} matches`
+      : "Checking broader interest matches",
+    "Waiting for replies",
+  ];
+}
 
 export default function Finding() {
   const router = useRouter();
   const { state, matches } = useApp();
   const a = state.activity;
+  const stages = buildStages(a.specific_interest_tags, a.broader_interest_tags);
   const [stage, setStage] = useState(0);
   const [accepted, setAccepted] = useState(0);
 
@@ -38,7 +51,7 @@ export default function Finding() {
 
   const target = a.group_size_target;
   const ready = accepted >= a.minimum_group_size;
-  const stagesDone = stage >= STAGES.length;
+  const stagesDone = stage >= stages.length;
 
   const topMatches = matches.filter((m) => !m.excluded).slice(0, 5);
 
@@ -48,7 +61,7 @@ export default function Finding() {
         <p className="display text-[18px]">{a.title}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-[var(--color-ink-soft)] mt-1">
           <span className="inline-flex items-center gap-1">
-            <Clock size={13} /> {a.day} {a.time}
+            <Clock size={13} /> {formatDayTime(a.day, a.time)}
           </span>
           <span className="inline-flex items-center gap-1">
             <Users size={13} /> {a.group_size_target} people
@@ -70,7 +83,7 @@ export default function Finding() {
           </div>
           <div className="flex-1">
             <p className="text-[14.5px] font-medium">
-              HOMING is asking people who fit best.
+              Homi is asking people who fit best.
             </p>
             <p className="text-[12.5px] text-[var(--color-muted)]">
               You stay anonymous until everyone verifies.
@@ -93,7 +106,7 @@ export default function Finding() {
         <Progress value={accepted} max={target} />
 
         <div className="grid gap-2 mt-5">
-          {STAGES.map((label, i) => {
+          {stages.map((label, i) => {
             const done = i < stage;
             const active = i === stage && !stagesDone;
             return (

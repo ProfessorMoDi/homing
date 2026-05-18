@@ -6,6 +6,8 @@ import { Send, Sparkle, Pencil, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, Avatar, PrimaryButton, GhostButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
+import type { Activity } from "@/lib/types";
+import { formatDuration } from "@/lib/formatActivity";
 
 interface ChatMessage {
   id: string;
@@ -15,8 +17,25 @@ interface ChatMessage {
   self?: boolean;
 }
 
-const DRAFT =
-  "Hey everyone, nice to meet you. HOMING matched us for Catan on Thursday. I thought we could keep it simple: one game, around 1.5 hours, and see if we want to do it again sometime.";
+function activityNoun(title: string): string {
+  const cleaned = title
+    .replace(/^(start a |start the |try a |try the |begin a |begin the |a |the )/i, "")
+    .trim();
+  return cleaned || "this activity";
+}
+
+function buildDraft(a: Activity): string {
+  const noun = activityNoun(a.title);
+  const day = a.day?.trim();
+  const duration = formatDuration(a.duration);
+  const opener = day
+    ? `Hey everyone, nice to meet you. HOMING matched us for ${noun} on ${day}.`
+    : `Hey everyone, nice to meet you. HOMING matched us for ${noun}.`;
+  const middle = duration
+    ? ` I thought we could keep it simple: one round, around ${duration}, and see if we want to do it again sometime.`
+    : ` I thought we could keep it simple: one round and see if we want to do it again sometime.`;
+  return opener + middle;
+}
 
 const INITIAL: ChatMessage[] = [
   {
@@ -31,7 +50,7 @@ export default function Chat() {
   const router = useRouter();
   const { state } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
-  const [draft, setDraft] = useState(DRAFT);
+  const [draft, setDraft] = useState(() => buildDraft(state.activity));
   const [draftOpen, setDraftOpen] = useState(true);
   const [input, setInput] = useState("");
 
@@ -49,13 +68,17 @@ export default function Chat() {
     ]);
     setDraftOpen(false);
     setInput("");
+    const day = state.activity.day?.trim();
+    const franzReply = day
+      ? `Yes! ${day} works for me. Looking forward to it.`
+      : "Yes! Sounds good. Looking forward to it.";
     setTimeout(() => {
       setMessages((m) => [
         ...m,
         {
           id: "m_f",
           sender: "Franz",
-          content: "Yes! Thursday works. I'll bring my copy if no one else does.",
+          content: franzReply,
           ts: "now",
         },
       ]);
@@ -66,7 +89,7 @@ export default function Chat() {
         {
           id: "m_l",
           sender: "Lena",
-          content: "Same. I'll find us a quiet corner table.",
+          content: "Same here. See you all then.",
           ts: "now",
         },
       ]);
@@ -127,7 +150,7 @@ export default function Chat() {
               <Sparkle size={13} />
             </span>
             <p className="text-[13px] font-medium text-[var(--color-sage-deep)]">
-              Want help sending the first message? · only you can see this
+              Homi can draft the first message · only you can see this
             </p>
           </div>
           <textarea
@@ -158,7 +181,7 @@ export default function Chat() {
             </button>
           </div>
           <p className="text-[11.5px] text-[var(--color-sage-deep)] mt-2 opacity-80">
-            HOMING never sends automatically. You stay the sender.
+            Homi never sends automatically. You stay the sender.
           </p>
         </Card>
       )}
@@ -186,7 +209,7 @@ export default function Chat() {
             className="btn-ghost !text-[12px]"
             onClick={() => setDraftOpen(true)}
           >
-            <Sparkle size={12} /> Ghost-host draft
+            <Sparkle size={12} /> Ask Homi to draft
           </button>
           <button
             className="btn-ghost !text-[12px]"

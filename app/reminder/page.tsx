@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
 import { useApp } from "@/lib/store";
+import { formatDayTime } from "@/lib/formatActivity";
 
 export default function Reminder() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function Reminder() {
         <p className="display text-[22px] mb-1">{a.title} is tonight.</p>
         <div className="grid gap-1.5 text-[13.5px] text-[var(--color-ink-soft)] mt-2">
           <span className="inline-flex items-center gap-2">
-            <Clock size={14} /> {a.day} {a.time}
+            <Clock size={14} /> {formatDayTime(a.day, a.time)}
           </span>
           <span className="inline-flex items-center gap-2">
             <MapPin size={14} /> {a.exact_venue}

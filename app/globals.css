@@ -432,3 +432,12 @@
   50% { transform: scale(1.6); opacity: 0.4; }
 }
 .animate-live-pulse { animation: live-pulse 1.4s ease-in-out infinite; }
+
+/* Slide-fill progress bar used under carousel slides */
+@keyframes slide-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.animate-slide-fill {
+  animation: slide-fill 4.2s linear forwards;
+}

@@ -8,6 +8,12 @@ import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
+import {
+  getOrFetchSuggestions,
+  hasCached,
+  topicSignature,
+  type RawSuggestedActivity,
+} from "@/lib/suggestionsCache";
 
 type RegenStatus = "idle" | "loading" | "ready" | "error";
 
@@ -22,15 +28,12 @@ export default function Themes() {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
   const [regen, setRegen] = useState<RegenStatus>("idle");
-  const triggered = useRef(false);
+  const lastSig = useRef<string | null>(null);
 
-  // Background regeneration of activity suggestions based on current topics.
+  // Background regeneration of activity suggestions, keyed on a topic
+  // signature. The module-level cache survives navigation and React Strict
+  // Mode's double mount, so going back and forth never re-fires the request.
   useEffect(() => {
-    if (triggered.current) return;
-    if (state.topics.length === 0) return;
-    triggered.current = true;
-    setRegen("loading");
-
     const visibleTopics = state.topics
       .filter((t) => !t.hidden)
       .map((t) => ({
@@ -39,38 +42,54 @@ export default function Themes() {
         tags: t.tags,
       }));
 
-    const controller = new AbortController();
-    fetch("/api/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        topics: visibleTopics,
-        languages: state.signup.languages_comfortable,
-        availability_hints: state.signup.availability,
-        minor_interests: state.minorInterests,
-      }),
-      signal: controller.signal,
+    if (visibleTopics.length === 0) return;
+
+    const sig = topicSignature(visibleTopics);
+    if (lastSig.current === sig) return; // no meaningful change since last run
+    lastSig.current = sig;
+
+    // Cache hit — show ready immediately, nothing to do.
+    if (hasCached(sig)) {
+      setRegen("ready");
+      return;
+    }
+
+    let cancelled = false;
+    setRegen("loading");
+
+    getOrFetchSuggestions(sig, async () => {
+      const r = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: visibleTopics,
+          languages: state.signup.languages_comfortable,
+          availability_hints: state.signup.availability,
+          minor_interests: state.minorInterests,
+        }),
+      });
+      if (!r.ok) throw new Error(`Suggest failed (${r.status})`);
+      const data = (await r.json()) as { activities?: RawSuggestedActivity[] };
+      const list = Array.isArray(data.activities) ? data.activities : [];
+      if (list.length === 0) {
+        throw new Error("Empty activities");
+      }
+      return list;
     })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Suggest failed (${r.status})`);
-        const data = (await r.json()) as { activities?: unknown[] };
-        const list = Array.isArray(data.activities)
-          ? (data.activities as Parameters<typeof setSuggestedActivities>[0])
-          : [];
-        if (list.length > 0) {
-          setSuggestedActivities(list);
-          setRegen("ready");
-        } else {
-          setRegen("error");
-        }
+      .then((activities) => {
+        if (cancelled) return;
+        setSuggestedActivities(activities);
+        setRegen("ready");
       })
       .catch((err: unknown) => {
-        if ((err as { name?: string })?.name === "AbortError") return;
+        if (cancelled) return;
         console.warn("Background suggest failed", err);
         setRegen("error");
       });
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [
     state.topics,
     state.signup.languages_comfortable,
@@ -96,7 +115,7 @@ export default function Themes() {
 
   return (
     <AppShell back="/transcribing" title="Main themes">
-      <h1 className="display text-[26px] mb-1">Main themes HOMING heard</h1>
+      <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-5">
         Just the big ones. You can edit, remove, or open everything else below.
       </p>
@@ -209,14 +228,14 @@ function RegenBadge({ status }: { status: RegenStatus }) {
         {status === "loading" && (
           <>
             <Sparkles size={12} />
-            Drafting 3 things you could actually do
+            Homi is drafting 3 things you could actually do
             <ThinkingDots size="small" />
           </>
         )}
         {status === "ready" && (
           <>
             <Check size={12} strokeWidth={3} />
-            Fresh suggestions ready
+            Homi has 3 fresh suggestions ready
           </>
         )}
         {status === "error" && (

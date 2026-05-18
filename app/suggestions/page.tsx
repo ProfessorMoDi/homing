@@ -13,6 +13,7 @@ import {
 } from "@/lib/matching";
 import type { Activity } from "@/lib/types";
 import { useApp } from "@/lib/store";
+import { formatDayTime, formatDuration } from "@/lib/formatActivity";
 
 const fallbackCards: Activity[] = [
   defaultCatanActivity,
@@ -80,7 +81,7 @@ export default function Suggestions() {
                 {incomingInviteActivity.title}
               </p>
               <p className="text-[12.5px] text-[var(--color-ink-soft)]">
-                {incomingInviteActivity.day} {incomingInviteActivity.time} · {incomingInviteActivity.group_size_target} people · {incomingInviteActivity.location_area}
+                {formatDayTime(incomingInviteActivity.day, incomingInviteActivity.time)} · {incomingInviteActivity.group_size_target} people · {incomingInviteActivity.location_area}
               </p>
               <p className="text-[12px] text-[var(--color-muted)] mt-1.5">
                 Another HOMING user started this — tap to see how it looks from the other side.
@@ -104,7 +105,7 @@ export default function Suggestions() {
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-[var(--color-ink-soft)] mb-3">
               <span className="inline-flex items-center gap-1">
-                <Clock size={13} /> {a.day} {a.time} · {a.duration}
+                <Clock size={13} /> {formatDayTime(a.day, a.time)} · {formatDuration(a.duration)}
               </span>
               <span className="inline-flex items-center gap-1">
                 <Users size={13} /> {a.group_size_target} people
