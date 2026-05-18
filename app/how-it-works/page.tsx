@@ -71,6 +71,12 @@ export default function HowItWorks() {
       <Link href="/signup">
         <PrimaryButton>Start</PrimaryButton>
       </Link>
+      <Link
+        href="/theory"
+        className="block text-center mt-4 text-[12.5px] text-[var(--color-muted)] hover:text-[var(--color-sage-deep)]"
+      >
+        Curious how it works under the hood? →
+      </Link>
     </AppShell>
   );
 }

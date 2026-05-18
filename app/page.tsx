@@ -13,12 +13,20 @@ export default function Landing() {
           <PigeonMark size={26} />
           <span className="display text-[18px]">HOMING</span>
         </div>
-        <Link
-          href="/demo"
-          className="text-[12.5px] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-        >
-          Demo map
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/theory"
+            className="text-[12.5px] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          >
+            Under the hood
+          </Link>
+          <Link
+            href="/demo"
+            className="text-[12.5px] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+          >
+            Demo map
+          </Link>
+        </div>
       </div>
 
       <div className="relative flex-1 px-5 pt-10 pb-6 flex flex-col">
