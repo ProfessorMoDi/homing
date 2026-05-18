@@ -193,8 +193,17 @@ export default function Themes() {
 
       <RegenBadge status={regen} />
 
-      <PrimaryButton onClick={() => router.push("/suggestions")}>
-        Looks right
+      <PrimaryButton
+        onClick={() => router.push("/suggestions")}
+        disabled={regen === "loading" || regen === "idle"}
+      >
+        {regen === "loading" || regen === "idle" ? (
+          <>
+            Waiting for fresh ideas <ThinkingDots size="small" />
+          </>
+        ) : (
+          "Looks right"
+        )}
       </PrimaryButton>
       <div className="grid grid-cols-2 gap-2 mt-3">
         <button
