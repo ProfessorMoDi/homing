@@ -1,0 +1,201 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Send, Sparkle, Pencil, X } from "lucide-react";
+import { AppShell } from "@/components/AppShell";
+import { Card, Avatar, PrimaryButton, GhostButton } from "@/components/Bits";
+import { useApp } from "@/lib/store";
+
+interface ChatMessage {
+  id: string;
+  sender: string;
+  content: string;
+  ts: string;
+  self?: boolean;
+}
+
+const DRAFT =
+  "Hey everyone, nice to meet you. HOMING matched us for Catan on Thursday. I thought we could keep it simple: one game, around 1.5 hours, and see if we want to do it again sometime.";
+
+const INITIAL: ChatMessage[] = [
+  {
+    id: "m_sys",
+    sender: "HOMING",
+    content: "You all verified. Group chat opened.",
+    ts: "now",
+  },
+];
+
+export default function Chat() {
+  const router = useRouter();
+  const { state } = useApp();
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
+  const [draft, setDraft] = useState(DRAFT);
+  const [draftOpen, setDraftOpen] = useState(true);
+  const [input, setInput] = useState("");
+
+  function send(content: string) {
+    if (!content.trim()) return;
+    setMessages((m) => [
+      ...m,
+      {
+        id: "m_" + Math.random().toString(36).slice(2),
+        sender: state.signup.first_name || "You",
+        content,
+        ts: "now",
+        self: true,
+      },
+    ]);
+    setDraftOpen(false);
+    setInput("");
+    setTimeout(() => {
+      setMessages((m) => [
+        ...m,
+        {
+          id: "m_f",
+          sender: "Franz",
+          content: "Yes! Thursday works. I'll bring my copy if no one else does.",
+          ts: "now",
+        },
+      ]);
+    }, 1100);
+    setTimeout(() => {
+      setMessages((m) => [
+        ...m,
+        {
+          id: "m_l",
+          sender: "Lena",
+          content: "Same. I'll find us a quiet corner table.",
+          ts: "now",
+        },
+      ]);
+    }, 2200);
+  }
+
+  return (
+    <AppShell
+      back="/activity/details"
+      title={state.activity.title}
+      right={
+        <button
+          className="btn-ghost"
+          onClick={() => router.push("/feedback")}
+          title="Jump to feedback"
+        >
+          Skip to feedback
+        </button>
+      }
+    >
+      <div className="grid gap-3 mb-4">
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className={
+              "flex items-end gap-2 " +
+              (m.self ? "justify-end" : "justify-start")
+            }
+          >
+            {!m.self && m.sender !== "HOMING" && (
+              <Avatar name={m.sender} color="sky" />
+            )}
+            <div
+              className={
+                "max-w-[78%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed " +
+                (m.sender === "HOMING"
+                  ? "bg-[var(--color-cream-warm)] text-[var(--color-muted)] text-[12.5px] italic mx-auto"
+                  : m.self
+                  ? "bg-[var(--color-ink)] text-white rounded-br-md"
+                  : "bg-[var(--color-paper)] border border-[var(--color-line)] rounded-bl-md")
+              }
+            >
+              {!m.self && m.sender !== "HOMING" && (
+                <p className="text-[11.5px] text-[var(--color-muted)] mb-0.5">
+                  {m.sender}
+                </p>
+              )}
+              {m.content}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {draftOpen && (
+        <Card className="!bg-[var(--color-sage-soft)] !border-transparent mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="grid place-items-center h-7 w-7 rounded-full bg-white text-[var(--color-sage-deep)]">
+              <Sparkle size={13} />
+            </span>
+            <p className="text-[13px] font-medium text-[var(--color-sage-deep)]">
+              Want help sending the first message? · only you can see this
+            </p>
+          </div>
+          <textarea
+            className="field min-h-24 mb-3 text-[13.5px]"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button
+              className="btn-primary !py-2 !text-[13px] flex-1"
+              onClick={() => send(draft)}
+            >
+              <Send size={14} />
+              Send
+            </button>
+            <button
+              className="btn-secondary !w-auto !py-2 !text-[13px] px-3"
+              onClick={() => setDraftOpen(true)}
+              title="Keep editing"
+            >
+              <Pencil size={14} /> Edit
+            </button>
+            <button
+              className="btn-ghost !text-[13px]"
+              onClick={() => setDraftOpen(false)}
+            >
+              <X size={14} /> Skip
+            </button>
+          </div>
+          <p className="text-[11.5px] text-[var(--color-sage-deep)] mt-2 opacity-80">
+            HOMING never sends automatically. You stay the sender.
+          </p>
+        </Card>
+      )}
+
+      <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-3 bg-[var(--color-cream)] border-t border-[var(--color-line)]">
+        <div className="flex items-center gap-2">
+          <input
+            className="field"
+            placeholder="Message the group"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") send(input);
+            }}
+          />
+          <button
+            className="grid place-items-center h-10 w-10 rounded-full bg-[var(--color-ink)] text-white"
+            onClick={() => send(input)}
+          >
+            <Send size={16} />
+          </button>
+        </div>
+        <div className="flex justify-between mt-2">
+          <button
+            className="btn-ghost !text-[12px]"
+            onClick={() => setDraftOpen(true)}
+          >
+            <Sparkle size={12} /> Ghost-host draft
+          </button>
+          <button
+            className="btn-ghost !text-[12px]"
+            onClick={() => router.push("/reminder")}
+          >
+            Reminder preview →
+          </button>
+        </div>
+      </div>
+    </AppShell>
+  );
+}

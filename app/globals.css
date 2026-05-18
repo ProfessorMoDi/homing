@@ -1,0 +1,434 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #f7f6f1;
+  --color-cream-warm: #ecebe3;
+  --color-paper: #ffffff;
+  --color-ink: #1b1d1c;
+  --color-ink-soft: #4a4d4c;
+  --color-muted: #8a8a85;
+  --color-line: #e2dfd4;
+  --color-sage: #4f7942;
+  --color-sage-soft: #e0e9d6;
+  --color-sage-deep: #2f4926;
+  --color-clay: #c97e63;
+  --color-clay-soft: #f1d8cb;
+  --color-sky: #8fb3c9;
+  --color-sky-soft: #dbe7ee;
+  --color-sand: #ead9bf;
+  --color-sand-deep: #b8975f;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+
+  --radius-card: 1.5rem;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 1px 0 rgba(27, 29, 28, 0.04),
+    0 8px 24px rgba(27, 29, 28, 0.06);
+  --shadow-lift: 0 2px 0 rgba(27, 29, 28, 0.04),
+    0 18px 40px rgba(27, 29, 28, 0.08);
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: var(--color-sage-soft);
+    color: var(--color-sage-deep);
+  }
+}
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+
+  .frame {
+    width: 100%;
+    max-width: 440px;
+    margin-inline: auto;
+    min-height: 100dvh;
+    background: var(--color-cream);
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media (min-width: 720px) {
+    .frame {
+      margin-block: 2rem;
+      min-height: calc(100dvh - 4rem);
+      border-radius: 36px;
+      box-shadow: var(--shadow-lift);
+      overflow: hidden;
+    }
+  }
+
+  .card {
+    background: var(--color-paper);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-soft);
+    border: 1px solid rgba(27, 29, 28, 0.04);
+  }
+
+  .card-outline {
+    background: var(--color-paper);
+    border-radius: var(--radius-card);
+    border: 1px solid var(--color-line);
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.78rem;
+    background: var(--color-cream-warm);
+    color: var(--color-ink-soft);
+    border: 1px solid var(--color-line);
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-sage);
+    color: var(--color-paper);
+    font-weight: 500;
+    width: 100%;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  .btn-primary:hover {
+    background: var(--color-sage-deep);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-primary:disabled {
+    background: var(--color-line);
+    color: var(--color-muted);
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.1rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+    font-weight: 500;
+    width: 100%;
+    transition: background 0.15s ease;
+  }
+
+  .btn-secondary:hover {
+    background: var(--color-cream-warm);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-pill);
+    color: var(--color-ink-soft);
+    font-size: 0.88rem;
+    transition: background 0.15s ease;
+  }
+
+  .btn-ghost:hover {
+    background: var(--color-cream-warm);
+  }
+
+  .field {
+    display: block;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-radius: 0.9rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 0.95rem;
+    transition: border 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .field:focus {
+    outline: none;
+    border-color: var(--color-sage);
+    box-shadow: 0 0 0 4px var(--color-sage-soft);
+  }
+
+  .label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--color-ink-soft);
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+    font-size: 0.86rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+
+  .chip[data-selected="true"] {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    border-color: var(--color-ink);
+  }
+
+  .chip:hover:not([data-selected="true"]) {
+    background: var(--color-cream-warm);
+  }
+
+  .seg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--color-line);
+    margin: 1.25rem 0;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(250, 247, 242, 0.85);
+    backdrop-filter: saturate(150%) blur(12px);
+    -webkit-backdrop-filter: saturate(150%) blur(12px);
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .scrim {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(143, 179, 201, 0.16), transparent 60%),
+      radial-gradient(circle at 80% 30%, rgba(201, 126, 99, 0.10), transparent 55%),
+      radial-gradient(circle at 30% 90%, rgba(79, 121, 66, 0.18), transparent 60%);
+  }
+
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
+
+/* Pigeon animations */
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-8px) rotate(1deg); }
+}
+
+@keyframes wing-flap {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.65); }
+}
+
+@keyframes fly-across {
+  0% { transform: translate(-30%, 30%) rotate(-8deg); opacity: 0; }
+  10% { opacity: 1; }
+  50% { transform: translate(20%, -20%) rotate(6deg); }
+  90% { opacity: 1; }
+  100% { transform: translate(80%, 10%) rotate(-3deg); opacity: 0; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stagger {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float { animation: float-soft 4s ease-in-out infinite; }
+.animate-wing { animation: wing-flap 0.5s ease-in-out infinite; transform-origin: top center; }
+.animate-fly { animation: fly-across 9s ease-in-out infinite; }
+.animate-pulse-ring { animation: pulse-ring 1.6s ease-out infinite; }
+.animate-fade-up { animation: fade-up 0.4s ease-out both; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.stagger > * {
+  opacity: 0;
+  animation: stagger 0.4s ease-out forwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger > *:nth-child(2) { animation-delay: 0.12s; }
+.stagger > *:nth-child(3) { animation-delay: 0.19s; }
+.stagger > *:nth-child(4) { animation-delay: 0.26s; }
+.stagger > *:nth-child(5) { animation-delay: 0.33s; }
+.stagger > *:nth-child(6) { animation-delay: 0.4s; }
+.stagger > *:nth-child(7) { animation-delay: 0.47s; }
+.stagger > *:nth-child(8) { animation-delay: 0.54s; }
+
+/* Thinking dots — wave of three soft dots */
+@keyframes dot-wave {
+  0%, 80%, 100% { transform: scale(0.4); opacity: 0.35; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.dot-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: currentColor;
+}
+
+.dot-wave > span {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: dot-wave 1.2s ease-in-out infinite;
+}
+
+.dot-wave > span:nth-child(2) { animation-delay: 0.18s; }
+.dot-wave > span:nth-child(3) { animation-delay: 0.36s; }
+
+/* Breathing orb — soft radial pulse that frames the pigeon */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+@keyframes breathe-slow {
+  0%, 100% { transform: scale(0.85); opacity: 0.25; }
+  50% { transform: scale(1.18); opacity: 0.65; }
+}
+
+.breathe-orb {
+  position: absolute;
+  inset: 8%;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 55%, rgba(79, 121, 66, 0.32), transparent 65%);
+  animation: breathe 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.breathe-orb-2 {
+  position: absolute;
+  inset: -6%;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, rgba(143, 179, 201, 0.22), transparent 60%);
+  animation: breathe-slow 3.6s ease-in-out infinite;
+  animation-delay: 0.4s;
+  pointer-events: none;
+}
+
+/* Pop-in for the checkmark when a stage completes */
+@keyframes pop-check {
+  0% { transform: scale(0.4); opacity: 0; }
+  55% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop-check { animation: pop-check 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Soft determinate spinner — a thin arc that rotates */
+@keyframes spin-soft {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-soft {
+  display: block;
+  border-style: solid;
+  border-width: 2px;
+  border-color: currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: spin-soft 0.9s linear infinite;
+}
+
+/* Slide-in for status rows in /activity/finding */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-left { animation: slide-in-left 0.45s ease-out both; }
+
+/* Animated determinate progress bar fill */
+@keyframes progress-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(var(--p, 1)); }
+}
+.progress-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-line);
+  overflow: hidden;
+}
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--color-sage);
+  border-radius: 999px;
+  transform-origin: left center;
+  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Bouncing dot used as a “live” marker */
+@keyframes live-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.4; }
+}
+.animate-live-pulse { animation: live-pulse 1.4s ease-in-out infinite; }
