@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
+import { ClientShell } from "@/components/ClientShell";
 
 export const metadata: Metadata = {
   title: "HOMING — small real-life activities",
@@ -36,7 +37,7 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <AppProvider>
-          <div className="frame">{children}</div>
+          <ClientShell>{children}</ClientShell>
         </AppProvider>
       </body>
     </html>
