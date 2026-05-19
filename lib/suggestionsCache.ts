@@ -5,6 +5,8 @@
 // the same SPA session so going back to /themes never re-fetches the same
 // input, and survives React Strict Mode's double mount.
 
+import { sampleMainTopics, sampleSuggestedActivities } from "./data";
+
 export interface RawSuggestedActivity {
   title: string;
   description: string;
@@ -38,6 +40,15 @@ export function topicSignature(topics: TopicLike[]): string {
 
 const cache = new Map<string, RawSuggestedActivity[]>();
 const inflight = new Map<string, Promise<RawSuggestedActivity[]>>();
+
+// Pre-seed the sample voice flow so its three suggestions are served from
+// memory instead of calling /api/suggest every time the demo runs. The
+// hardcoded sample never changes — pinning it avoids credit burn and
+// removes one source of demo flakiness.
+cache.set(
+  topicSignature(sampleMainTopics),
+  sampleSuggestedActivities as RawSuggestedActivity[],
+);
 
 export function hasCached(sig: string): boolean {
   return cache.has(sig);

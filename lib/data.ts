@@ -268,3 +268,64 @@ export const sampleActivityTypes = [
   "Low-pressure first meeting",
   "Activity-led conversation",
 ];
+
+// Three hardcoded activity suggestions matched to the sample voice
+// transcript. Pre-seeded into the suggestions cache at module load so the
+// demo path never hits the LLM — saves credits and avoids failures on
+// transient API outages. Live (non-sample) recordings still call the API.
+//
+// The shape matches RawSuggestedActivity in lib/suggestionsCache.ts; we keep
+// this declaration type-free so that file stays the single source of truth.
+export const sampleSuggestedActivities = [
+  {
+    title: "Start a Catan round",
+    description:
+      "One game of Catan on a Thursday evening, low-pressure, near campus.",
+    day: "Thursday",
+    time: "19:30",
+    duration: "1.5 hours",
+    location_area: "Near EUR campus",
+    exact_venue: "Boardroom Café · Honingerdijk",
+    group_size_target: 4,
+    language: "English",
+    energy_level: "Low-pressure / structured",
+    specific_interest_tags: ["catan"],
+    broader_interest_tags: ["board games", "strategy games"],
+    reason:
+      "You talked about wanting a slow Thursday Catan round again — this is exactly that.",
+  },
+  {
+    title: "Casual strategy evening",
+    description:
+      "Ticket to Ride or a similar light strategy game, one round, English.",
+    day: "Tuesday",
+    time: "19:00",
+    duration: "1 hr 30 min",
+    location_area: "Near EUR campus",
+    exact_venue: "Kralingen Game Café",
+    group_size_target: 4,
+    language: "English",
+    energy_level: "Relaxed",
+    specific_interest_tags: ["ticket to ride"],
+    broader_interest_tags: ["board games", "strategy games"],
+    reason:
+      "You mentioned Ticket to Ride and casual strategy nights — same vibe, different night.",
+  },
+  {
+    title: "Quiet game night",
+    description:
+      "Smaller, slower evening — one shorter game and a coffee, no pressure.",
+    day: "Wednesday",
+    time: "19:30",
+    duration: "1 hr 15 min",
+    location_area: "Kralingen",
+    exact_venue: "Heilige Boontjes",
+    group_size_target: 4,
+    language: "English",
+    energy_level: "Low-pressure / structured",
+    specific_interest_tags: ["board games"],
+    broader_interest_tags: ["casual games", "coffee"],
+    reason:
+      "Same low-key shape as Thursday, in case the week needs flexibility.",
+  },
+];
