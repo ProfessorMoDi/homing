@@ -3,7 +3,7 @@
 interface Props {
   size?: number;
   className?: string;
-  variant?: "soft" | "outline" | "flying";
+  variant?: "soft" | "outline" | "flying" | "idle";
 }
 
 const MASCOT_SRC = "/homi.png";
@@ -13,6 +13,7 @@ export function Pigeon({ size = 64, className = "", variant = "soft" }: Props) {
     variant === "flying"
       ? "drop-shadow-[0_8px_14px_rgba(31,38,28,0.18)]"
       : "drop-shadow-[0_2px_6px_rgba(31,38,28,0.08)]";
+  const sway = variant === "idle" ? "animate-pigeon-sway" : "";
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
@@ -22,7 +23,7 @@ export function Pigeon({ size = 64, className = "", variant = "soft" }: Props) {
       height={size}
       style={{ width: size, height: size }}
       draggable={false}
-      className={`object-contain select-none ${shadow} ${className}`}
+      className={`object-contain select-none ${shadow} ${sway} ${className}`}
     />
   );
 }

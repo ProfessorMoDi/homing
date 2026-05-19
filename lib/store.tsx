@@ -168,9 +168,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {}
+    const handle = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {}
+    }, 250);
+    return () => clearTimeout(handle);
   }, [state, hydrated]);
 
   const setSignup = useCallback((patch: Partial<Signup>) => {

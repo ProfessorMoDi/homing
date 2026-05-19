@@ -39,21 +39,21 @@ export default function Landing() {
           </div>
         </div>
 
-        <p className="text-[12px] text-[var(--color-muted)] text-center mb-6 inline-flex items-center justify-center gap-1.5">
-          <span className="inline-block h-1 w-1 rounded-full bg-[var(--color-sage)]" />
+        <p className="animate-hero-rise text-[12px] text-[var(--color-muted)] text-center mb-6 inline-flex items-center justify-center gap-1.5">
+          <span className="inline-block h-1 w-1 rounded-full bg-[var(--color-sage)] animate-live-pulse" />
           Meet Homi — the pigeon who quietly carries the messages.
         </p>
 
-        <h1 className="display text-[34px] leading-[1.05] text-center px-2">
+        <h1 className="animate-hero-rise delay-1 display text-[34px] leading-[1.05] text-center px-2">
           Turn what you like into a small real-life activity.
         </h1>
 
-        <p className="text-[15px] leading-relaxed text-[var(--color-ink-soft)] text-center mt-4 px-2">
+        <p className="animate-hero-rise delay-2 text-[15px] leading-relaxed text-[var(--color-ink-soft)] text-center mt-4 px-2">
           Talk about what you&apos;re into. HOMING suggests something you might
           actually want to do, then quietly invites people who fit.
         </p>
 
-        <div className="mt-auto pt-10 grid gap-3">
+        <div className="animate-hero-rise delay-3 mt-auto pt-10 grid gap-3">
           <Link href="/signup" className="w-full">
             <PrimaryButton>Start with EUR email</PrimaryButton>
           </Link>

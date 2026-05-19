@@ -225,8 +225,9 @@ function RegenBadge({ status }: { status: RegenStatus }) {
   return (
     <div className="mb-3 flex items-center justify-center">
       <span
+        key={status}
         className={
-          "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] transition-colors " +
+          "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] transition-colors animate-pop-in " +
           (status === "loading"
             ? "bg-[var(--color-cream-warm)] text-[var(--color-ink-soft)]"
             : status === "ready"
@@ -236,14 +237,14 @@ function RegenBadge({ status }: { status: RegenStatus }) {
       >
         {status === "loading" && (
           <>
-            <Sparkles size={12} />
+            <Sparkles size={12} className="animate-pulse" />
             Homi is drafting 3 things you could actually do
             <ThinkingDots size="small" />
           </>
         )}
         {status === "ready" && (
           <>
-            <Check size={12} strokeWidth={3} />
+            <Check size={12} strokeWidth={3} className="animate-pop-check" />
             Homi has 3 fresh suggestions ready
           </>
         )}

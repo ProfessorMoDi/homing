@@ -441,3 +441,89 @@
 .animate-slide-fill {
   animation: slide-fill 4.2s linear forwards;
 }
+
+/* Soft fade-in used inside the transcribing carousel */
+@keyframes fade-in-soft {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-soft { animation: fade-in-soft 0.35s ease-out both; }
+
+/* Hover lift for cards that link or accept a tap. Pair with .card or .card-outline. */
+.lift {
+  transition:
+    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.18s ease;
+  will-change: transform;
+}
+@media (hover: hover) {
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+  }
+}
+.lift:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.08s;
+}
+
+/* Tap shrink used on icon buttons / chips where we want a small press feedback. */
+.tap {
+  transition: transform 0.12s ease;
+}
+.tap:active {
+  transform: scale(0.94);
+}
+
+/* Subtle idle pigeon sway — gentler than animate-float, used in headers. */
+@keyframes pigeon-sway {
+  0%, 100% { transform: translateY(0) rotate(-1.4deg); }
+  50% { transform: translateY(-3px) rotate(1.6deg); }
+}
+.animate-pigeon-sway { animation: pigeon-sway 5.5s ease-in-out infinite; }
+
+/* Pop-in used on labels/badges that arrive after a state change. */
+@keyframes pop-in {
+  0% { transform: scale(0.85); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.animate-pop-in { animation: pop-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Page-level slide-up — for hero headlines that should arrive a beat after load. */
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-hero-rise { animation: hero-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.18s; }
+.delay-3 { animation-delay: 0.3s; }
+
+/* Reduced motion: collapse decorative animations. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-pigeon-sway,
+  .animate-fly,
+  .animate-wing,
+  .animate-pulse-ring,
+  .animate-shimmer,
+  .animate-slide-fill,
+  .animate-live-pulse,
+  .breathe-orb,
+  .breathe-orb-2,
+  .stagger > *,
+  .animate-hero-rise,
+  .animate-fade-up,
+  .animate-fade-in-soft,
+  .animate-slide-in-left,
+  .animate-pop-check,
+  .animate-pop-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .lift {
+    transition: none;
+  }
+}

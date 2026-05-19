@@ -96,7 +96,7 @@ export default function Suggestions() {
 
       <div className="grid gap-4 stagger">
         {cards.map((a) => (
-          <Card key={a.id}>
+          <Card key={a.id} interactive>
             <div className="flex items-start justify-between gap-2 mb-2">
               <p className="display text-[19px] leading-tight">{a.title}</p>
               <span className="pill !bg-[var(--color-sage-soft)] !text-[var(--color-sage-deep)] !border-transparent">

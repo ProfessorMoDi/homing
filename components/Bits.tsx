@@ -6,14 +6,17 @@ export function Card({
   children,
   className = "",
   onClick,
+  interactive,
 }: {
   children: React.ReactNode;
   className?: string;
   onClick?: () => void;
+  interactive?: boolean;
 }) {
+  const lift = interactive ?? !!onClick;
   return (
     <div
-      className={`card p-5 ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`card p-5 ${onClick ? "cursor-pointer" : ""} ${lift ? "lift" : ""} ${className}`}
       onClick={onClick}
     >
       {children}
