@@ -26,6 +26,9 @@ export default function VoiceOnboarding() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const pigeonAltitudeRef = useRef<HTMLDivElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (recording) {
@@ -42,8 +45,84 @@ export default function VoiceOnboarding() {
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      audioCtxRef.current?.close().catch(() => {});
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  // Pigeon altitude follows voice level: rises while you speak,
+  // glides back down when you go quiet. Reads the live MediaStream
+  // through an AnalyserNode and writes transform directly to the DOM
+  // so we don't trigger a React render every frame.
+  useEffect(() => {
+    if (!recording) {
+      const el = pigeonAltitudeRef.current;
+      if (el) el.style.transform = "translateY(0)";
+      return;
+    }
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    const AudioCtx: typeof AudioContext | undefined =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    audioCtxRef.current = ctx;
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.65;
+    source.connect(analyser);
+
+    const buf = new Uint8Array(analyser.fftSize);
+    const SPEECH_FLOOR = 0.018; // below this is treated as silence
+    const MAX_LIFT_PX = 70; // peak altitude
+    const RISE = 0.09;
+    const FALL = 0.025;
+    let current = 0;
+    let cancelled = false;
+
+    function tick() {
+      if (cancelled) return;
+      analyser.getByteTimeDomainData(buf);
+      let sumSquares = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sumSquares += v * v;
+      }
+      const rms = Math.sqrt(sumSquares / buf.length);
+      const target =
+        rms > SPEECH_FLOOR
+          ? Math.min(MAX_LIFT_PX, (rms - SPEECH_FLOOR) * 480)
+          : 0;
+      const factor = target > current ? RISE : FALL;
+      current += (target - current) * factor;
+      const el = pigeonAltitudeRef.current;
+      if (el) {
+        el.style.transform = `translateY(${-current.toFixed(2)}px)`;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    tick();
+
+    return () => {
+      cancelled = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      try {
+        source.disconnect();
+      } catch {}
+      try {
+        analyser.disconnect();
+      } catch {}
+      ctx.close().catch(() => {});
+      audioCtxRef.current = null;
+      const el = pigeonAltitudeRef.current;
+      if (el) el.style.transform = "translateY(0)";
+    };
+  }, [recording]);
 
   const doneEnabled = seconds >= 90;
   const skipEnabled = recording && seconds >= 1;
@@ -125,8 +204,13 @@ export default function VoiceOnboarding() {
       <div className="relative h-56 mb-6 overflow-hidden rounded-3xl scrim">
         {recording && <FlyingPigeon />}
         <div className="absolute inset-0 grid place-items-center">
-          <div className={recording ? "animate-float" : ""}>
-            <Pigeon size={120} />
+          <div
+            ref={pigeonAltitudeRef}
+            style={{ willChange: "transform" }}
+          >
+            <div className={recording ? "animate-float" : ""}>
+              <Pigeon size={120} />
+            </div>
           </div>
         </div>
       </div>
