@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 interface FlowStepProps {
   n: number | string;
@@ -70,6 +70,99 @@ const TILE_TONES: Record<
   clay: { bg: "var(--color-clay-soft)", fg: "#7d4730" },
   sand: { bg: "var(--color-sand)", fg: "#6a5326" },
 };
+
+/* ------------------------------------------------------------------ */
+/*  Pipeline stage card — used on the Stack overview slide of /theory  */
+/* ------------------------------------------------------------------ */
+
+interface PipelineStageProps {
+  number: string;
+  icon: ReactElement;
+  tone: "sage" | "sky" | "clay" | "sand";
+  name: string;
+  tagline: string;
+  bullets: string[];
+  stack: string[];
+}
+
+export function PipelineStage({
+  number,
+  icon,
+  tone,
+  name,
+  tagline,
+  bullets,
+  stack,
+}: PipelineStageProps) {
+  const palette = TILE_TONES[tone];
+  return (
+    <div className="card p-5 md:p-6 lg:p-7 flex flex-col h-full lift">
+      <div className="flex items-center justify-between mb-4 md:mb-5">
+        <span
+          className="grid place-items-center h-12 w-12 md:h-14 md:w-14 lg:h-16 lg:w-16 rounded-2xl shrink-0"
+          style={{ background: palette.bg, color: palette.fg }}
+        >
+          {icon}
+        </span>
+        <span
+          className="font-mono text-[10px] md:text-[11.5px] uppercase tracking-[0.2em] text-[var(--color-muted)]"
+        >
+          Pipeline {number}
+        </span>
+      </div>
+      <p className="display text-[20px] md:text-[24px] lg:text-[26px] leading-tight mb-1.5">
+        {name}
+      </p>
+      <p className="text-[13px] md:text-[14.5px] text-[var(--color-ink-soft)] leading-snug mb-4 md:mb-5">
+        {tagline}
+      </p>
+      <ul className="grid gap-2 md:gap-2.5 text-[12.5px] md:text-[14px] text-[var(--color-ink-soft)] leading-relaxed mb-4 md:mb-5 flex-1">
+        {bullets.map((b) => (
+          <li key={b} className="pl-4 relative">
+            <span
+              className="absolute left-0 top-2 md:top-2.5 h-1.5 w-1.5 rounded-full"
+              style={{ background: palette.fg }}
+            />
+            {b}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-1.5">
+        {stack.map((t) => (
+          <span
+            key={t}
+            className="text-[10.5px] md:text-[11.5px] font-mono text-[var(--color-muted)] bg-[var(--color-cream-warm)] px-2 py-0.5 rounded-full"
+          >
+            {t}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function FlowArrow() {
+  return (
+    <div className="flex items-center justify-center text-[var(--color-muted)] py-1 lg:py-0 lg:px-1">
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 22 22"
+        className="rotate-90 lg:rotate-0"
+        aria-hidden
+      >
+        <path
+          d="M 4 11 L 16 11 M 12 7 L 16 11 L 12 15"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      </svg>
+    </div>
+  );
+}
 
 export function StackTile({
   index,

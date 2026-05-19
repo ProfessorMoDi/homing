@@ -20,7 +20,8 @@ import { Card, Pill } from "@/components/Bits";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
 import {
   FlowStep,
-  StackTile,
+  PipelineStage,
+  FlowArrow,
   CodeSnippet,
   ResidencyRow,
   MatchGraph,
@@ -371,44 +372,103 @@ function StackSlide() {
     <Slide
       id="stack"
       eyebrow="01 / Architecture"
-      title="Stack at a glance"
-      subtitle="Four pipelines, each owning one transformation. Each box can be swapped without touching the others."
+      title="The four pipelines"
+      subtitle="A 90-second voice note flows through four stages and lands in a real-life meet-up. Each stage owns one transformation. The graph database underneath is the single source of truth — every stage reads from it and writes back to it."
     >
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-5">
-        <StackTile
-          index="01"
+      {/* Endpoints framing the pipeline so the narrative reads "from X to Y" */}
+      <div className="hidden lg:flex items-center justify-between text-[11.5px] uppercase tracking-[0.18em] text-[var(--color-muted)] font-medium mb-3 px-2">
+        <span>Input · what the user does</span>
+        <span>Output · what shows up</span>
+      </div>
+
+      {/* Pipeline grid — horizontal on lg, vertical stack below */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-3 lg:gap-2 items-stretch mb-8 md:mb-10">
+        <PipelineStage
+          number="01"
           tone="sage"
-          icon={<Mic size={18} className="md:hidden" />}
-          label="Capture voice"
-          tech="MediaRecorder · Opus · WebM"
+          icon={<Mic size={20} />}
+          name="Voice in"
+          tagline="Captured locally, never persisted."
+          bullets={[
+            "MediaRecorder grabs a 90-second microphone stream",
+            "Opus-encoded WebM blob kept in memory only",
+            "Blob handed off, then dropped",
+          ]}
+          stack={["MediaRecorder", "Opus / WebM", "audioStash"]}
         />
-        <StackTile
-          index="02"
+        <FlowArrow />
+        <PipelineStage
+          number="02"
           tone="sky"
-          icon={<Brain size={18} />}
-          label="Understand language"
-          tech="ElevenLabs Scribe → gpt-oss:120b"
+          icon={<Brain size={20} />}
+          name="Make sense"
+          tagline="Speech → atomic topics + activity ideas."
+          bullets={[
+            "Scribe transcribes the audio (Whisper on-device in prod)",
+            "gpt-oss:120b splits text into separable interests",
+            "Same call returns three concrete activity proposals",
+          ]}
+          stack={["ElevenLabs Scribe", "Ollama gpt-oss:120b", "JSON-mode"]}
         />
-        <StackTile
-          index="03"
+        <FlowArrow />
+        <PipelineStage
+          number="03"
           tone="clay"
-          icon={<Network size={18} />}
-          label="Match people"
-          tech="Graph DB · Cypher · multi-hop"
+          icon={<Network size={20} />}
+          name="Find people"
+          tagline="Topics → ranked candidates."
+          bullets={[
+            "Activity declares :REQUIRES edges to topics",
+            "Traverse to users via :LIKES; multi-hop friend-of-friend ready",
+            "Filter by language, availability, private :AVOID pairs",
+          ]}
+          stack={["Graph DB", "Cypher", "multi-hop"]}
         />
-        <StackTile
-          index="04"
+        <FlowArrow />
+        <PipelineStage
+          number="04"
           tone="sand"
-          icon={<Sparkles size={18} />}
-          label="Connect & verify"
-          tech="iDIN · ID+selfie · zero-knowledge"
+          icon={<Sparkles size={20} />}
+          name="Meet for real"
+          tagline="Accepted match → verified group → details revealed."
+          bullets={[
+            "Anonymous invites first; nothing exposes who declined",
+            "Age + identity verified before names and venue appear",
+            "Exact place is shared only after everyone passes",
+          ]}
+          stack={["iDIN", "ID + selfie", "zero-knowledge"]}
         />
       </div>
 
-      <div className="mt-10 md:mt-14 grid md:grid-cols-3 gap-3 md:gap-4">
+      {/* Graph-as-spine callout */}
+      <div className="rounded-3xl bg-[var(--color-cream-warm)] border border-[var(--color-line)] p-5 md:p-7 mb-8 md:mb-10">
+        <div className="flex items-start gap-4">
+          <span className="grid place-items-center h-11 w-11 md:h-12 md:w-12 rounded-2xl bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+            <Database size={18} />
+          </span>
+          <div className="flex-1">
+            <p className="text-[14.5px] md:text-[17px] font-medium mb-1.5">
+              One source of truth: the graph.
+            </p>
+            <p className="text-[13px] md:text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
+              Every pipeline writes its result as nodes and edges and reads
+              what the others have stored. We can rewrite any one pipeline
+              in isolation — swap Scribe for an on-device Whisper, switch
+              providers, redesign the match scoring — and the rest keeps
+              working unchanged.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Budgets */}
+      <p className="text-[11.5px] md:text-[13px] uppercase tracking-[0.18em] text-[var(--color-muted)] font-medium mb-3 md:mb-4 px-1">
+        Performance budgets
+      </p>
+      <div className="grid grid-cols-3 gap-3 md:gap-4">
         <BigStat value="90s" caption="Voice sample" />
         <BigStat value="2-step" caption="LLM extraction" />
-        <BigStat value="< 1s" caption="Graph match latency target" />
+        <BigStat value="< 1s" caption="Match latency target" />
       </div>
     </Slide>
   );
