@@ -491,14 +491,35 @@ function ApiFlowPanel() {
           fill="none"
         />
 
-        {/* Endpoint labels above each curve */}
-        <text x="150" y="22" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#3b5a73">
+        {/* Endpoint labels — centered between client (ends x=92) and providers (start x=212) */}
+        <text
+          x="152"
+          y="22"
+          textAnchor="middle"
+          fontSize="9"
+          fontFamily="ui-monospace, monospace"
+          fill="#3b5a73"
+        >
           POST /api/transcribe
         </text>
-        <text x="150" y="82" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#2f4926">
+        <text
+          x="152"
+          y="82"
+          textAnchor="middle"
+          fontSize="9"
+          fontFamily="ui-monospace, monospace"
+          fill="#2f4926"
+        >
           POST /api/analyze
         </text>
-        <text x="150" y="142" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#2f4926">
+        <text
+          x="152"
+          y="142"
+          textAnchor="middle"
+          fontSize="9"
+          fontFamily="ui-monospace, monospace"
+          fill="#2f4926"
+        >
           POST /api/suggest
         </text>
 
