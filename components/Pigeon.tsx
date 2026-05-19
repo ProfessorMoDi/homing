@@ -6,16 +6,13 @@ interface Props {
   variant?: "soft" | "outline" | "flying";
 }
 
-const MASCOT_SRC = "/homi.jpg";
+const MASCOT_SRC = "/homi.png";
 
 export function Pigeon({ size = 64, className = "", variant = "soft" }: Props) {
-  const radius = Math.max(8, Math.round(size * 0.18));
-  const ringClass =
-    variant === "outline"
-      ? "ring-1 ring-[var(--color-line)]"
-      : variant === "flying"
-        ? "shadow-[0_6px_14px_rgba(31,38,28,0.12)]"
-        : "";
+  const shadow =
+    variant === "flying"
+      ? "drop-shadow-[0_8px_14px_rgba(31,38,28,0.18)]"
+      : "drop-shadow-[0_2px_6px_rgba(31,38,28,0.08)]";
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
@@ -23,9 +20,9 @@ export function Pigeon({ size = 64, className = "", variant = "soft" }: Props) {
       alt="Homi the pigeon"
       width={size}
       height={size}
-      style={{ width: size, height: size, borderRadius: radius }}
+      style={{ width: size, height: size }}
       draggable={false}
-      className={`object-cover select-none ${ringClass} ${className}`}
+      className={`object-contain select-none ${shadow} ${className}`}
     />
   );
 }
