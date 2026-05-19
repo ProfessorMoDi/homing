@@ -16,17 +16,17 @@ import {
   ArrowUpRight,
   Home,
 } from "lucide-react";
-import { Card, Pill } from "@/components/Bits";
+import { Card } from "@/components/Bits";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
 import {
   FlowStep,
-  PipelineStage,
-  FlowArrow,
+  StageBlock,
+  DataArrow,
   CodeSnippet,
   ResidencyRow,
-  MatchGraph,
   AudioWave,
 } from "@/components/Diagrams";
+import { InteractiveGraph } from "@/components/InteractiveGraph";
 
 interface SectionDef {
   id: string;
@@ -372,118 +372,60 @@ function StackSlide() {
     <Slide
       id="stack"
       eyebrow="01 / Architecture"
-      title="The four pipelines"
-      subtitle="A 90-second voice note flows through four stages and lands in a real-life meet-up. Each stage owns one transformation. The graph database underneath is the single source of truth — every stage reads from it and writes back to it."
+      title="From a 90-second voice note to a real meet-up"
+      subtitle="Four stages. Each stage transforms what it gets, then writes the result to the graph."
     >
-      {/* Endpoints framing the pipeline so the narrative reads "from X to Y" */}
-      <div className="hidden lg:flex items-center justify-between text-[11.5px] uppercase tracking-[0.18em] text-[var(--color-muted)] font-medium mb-3 px-2">
-        <span>Input · what the user does</span>
-        <span>Output · what shows up</span>
-      </div>
-
-      {/* Pipeline grid — horizontal on lg, vertical stack below */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-3 lg:gap-2 items-stretch mb-8 md:mb-10">
-        <PipelineStage
+      {/* Big visual process strip */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-2 lg:gap-1 items-stretch mb-8 md:mb-10">
+        <StageBlock
           number="01"
           tone="sage"
-          icon={<Mic size={20} />}
+          icon={<Mic size={32} />}
           name="Voice in"
-          tagline="Captured locally, never persisted."
-          bullets={[
-            "MediaRecorder grabs a 90-second microphone stream",
-            "Opus-encoded WebM blob kept in memory only",
-            "Blob handed off, then dropped",
-          ]}
-          stack={["MediaRecorder", "Opus / WebM", "audioStash"]}
+          tech="MediaRecorder · Opus"
         />
-        <FlowArrow />
-        <PipelineStage
+        <DataArrow label="audio" />
+        <StageBlock
           number="02"
           tone="sky"
-          icon={<Brain size={20} />}
+          icon={<Brain size={32} />}
           name="Make sense"
-          tagline="Speech → atomic topics + activity ideas."
-          bullets={[
-            "Scribe transcribes the audio (Whisper on-device in prod)",
-            "gpt-oss:120b splits text into separable interests",
-            "Same call returns three concrete activity proposals",
-          ]}
-          stack={["ElevenLabs Scribe", "Ollama gpt-oss:120b", "JSON-mode"]}
+          tech="Scribe · gpt-oss"
         />
-        <FlowArrow />
-        <PipelineStage
+        <DataArrow label="topics" />
+        <StageBlock
           number="03"
           tone="clay"
-          icon={<Network size={20} />}
+          icon={<Network size={32} />}
           name="Find people"
-          tagline="Topics → ranked candidates."
-          bullets={[
-            "Activity declares :REQUIRES edges to topics",
-            "Traverse to users via :LIKES; multi-hop friend-of-friend ready",
-            "Filter by language, availability, private :AVOID pairs",
-          ]}
-          stack={["Graph DB", "Cypher", "multi-hop"]}
+          tech="Graph DB · Cypher"
         />
-        <FlowArrow />
-        <PipelineStage
+        <DataArrow label="candidates" />
+        <StageBlock
           number="04"
           tone="sand"
-          icon={<Sparkles size={20} />}
+          icon={<Sparkles size={32} />}
           name="Meet for real"
-          tagline="Accepted match → verified group → details revealed."
-          bullets={[
-            "Anonymous invites first; nothing exposes who declined",
-            "Age + identity verified before names and venue appear",
-            "Exact place is shared only after everyone passes",
-          ]}
-          stack={["iDIN", "ID + selfie", "zero-knowledge"]}
+          tech="iDIN · selfie"
         />
       </div>
 
-      {/* Graph-as-spine callout */}
-      <div className="rounded-3xl bg-[var(--color-cream-warm)] border border-[var(--color-line)] p-5 md:p-7 mb-8 md:mb-10">
-        <div className="flex items-start gap-4">
-          <span className="grid place-items-center h-11 w-11 md:h-12 md:w-12 rounded-2xl bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
-            <Database size={18} />
+      {/* Graph-as-spine callout (compact) */}
+      <div className="rounded-3xl bg-[var(--color-cream-warm)] border border-[var(--color-line)] p-4 md:p-5">
+        <div className="flex items-center gap-3 md:gap-4">
+          <span className="grid place-items-center h-10 w-10 md:h-11 md:w-11 rounded-2xl bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+            <Database size={16} />
           </span>
-          <div className="flex-1">
-            <p className="text-[14.5px] md:text-[17px] font-medium mb-1.5">
-              One source of truth: the graph.
-            </p>
-            <p className="text-[13px] md:text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
-              Every pipeline writes its result as nodes and edges and reads
-              what the others have stored. We can rewrite any one pipeline
-              in isolation — swap Scribe for an on-device Whisper, switch
-              providers, redesign the match scoring — and the rest keeps
-              working unchanged.
-            </p>
-          </div>
+          <p className="text-[13px] md:text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
+            <span className="font-medium text-[var(--color-ink)]">
+              One source of truth.
+            </span>{" "}
+            Every stage writes to the same graph and reads what the others
+            wrote. Any one pipeline can be rewritten in isolation.
+          </p>
         </div>
       </div>
-
-      {/* Budgets */}
-      <p className="text-[11.5px] md:text-[13px] uppercase tracking-[0.18em] text-[var(--color-muted)] font-medium mb-3 md:mb-4 px-1">
-        Performance budgets
-      </p>
-      <div className="grid grid-cols-3 gap-3 md:gap-4">
-        <BigStat value="90s" caption="Voice sample" />
-        <BigStat value="2-step" caption="LLM extraction" />
-        <BigStat value="< 1s" caption="Match latency target" />
-      </div>
     </Slide>
-  );
-}
-
-function BigStat({ value, caption }: { value: string; caption: string }) {
-  return (
-    <div className="card p-4 md:p-6 text-center">
-      <p className="display text-[34px] md:text-[48px] lg:text-[56px] leading-none text-[var(--color-sage-deep)]">
-        {value}
-      </p>
-      <p className="text-[12px] md:text-[14px] text-[var(--color-muted)] mt-1.5 md:mt-2.5 uppercase tracking-wider">
-        {caption}
-      </p>
-    </div>
   );
 }
 
@@ -649,61 +591,8 @@ function GraphSlide() {
       title="Topics → People"
       subtitle="Interests are many-to-many, friendship is sparse, and avoid-pairs are private. That's a graph problem, not a SQL one."
     >
-      <div className="grid lg:grid-cols-2 gap-6 lg:gap-10 mb-8">
-        <Card className="!p-5 md:!p-7">
-          <div className="flex items-center gap-2 mb-4">
-            <Database
-              size={16}
-              className="text-[var(--color-sage-deep)]"
-            />
-            <p className="text-[13px] md:text-[15px] font-medium">
-              Schema · 4 node types, 5 edge types
-            </p>
-          </div>
-          <div className="grid gap-2 md:gap-3 mb-5">
-            <NodeRow label=":User" hint="account, age band, languages" />
-            <NodeRow label=":Topic" hint="atomic interest extracted by LLM" />
-            <NodeRow
-              label=":Activity"
-              hint="one-off plan with required topics"
-            />
-            <NodeRow
-              label=":TimeSlot"
-              hint="availability window per user"
-            />
-          </div>
-          <p className="text-[12px] md:text-[13.5px] text-[var(--color-muted)] uppercase tracking-wider mb-2">
-            Edges
-          </p>
-          <div className="flex flex-wrap gap-1.5 md:gap-2">
-            <Pill>:LIKES (User → Topic)</Pill>
-            <Pill>:REQUIRES (Activity → Topic)</Pill>
-            <Pill>:AVAILABLE_AT (User → TimeSlot)</Pill>
-            <Pill>:ACCEPTED (User → Activity)</Pill>
-            <Pill>:AVOID (User ↔ User, private)</Pill>
-          </div>
-        </Card>
-
-        <Card className="!p-5 md:!p-7">
-          <p className="text-[13px] md:text-[15px] font-medium mb-4">
-            One match query, visualised
-          </p>
-          <MatchGraph className="mb-4 md:mb-5" />
-          <p className="text-[13px] md:text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
-            The activity declares its{" "}
-            <code className="font-mono text-[12px] md:text-[13.5px]">
-              :REQUIRES
-            </code>{" "}
-            edges to topics. We traverse to users who{" "}
-            <code className="font-mono text-[12px] md:text-[13.5px]">
-              :LIKES
-            </code>{" "}
-            any of those topics. Score is the number of distinct topics
-            matched — U2 and U3 win because they like two of the three
-            required topics.
-          </p>
-        </Card>
-      </div>
+      {/* The graph is the star of this slide — full width, interactive. */}
+      <InteractiveGraph className="mb-8 md:mb-10" />
 
       <div className="grid lg:grid-cols-[1.3fr_1fr] gap-6 lg:gap-10">
         <CodeSnippet
@@ -851,19 +740,6 @@ function PrivacySlide() {
 /* ------------------------------------------------------------------ */
 /*  Small bits used inside slides                                      */
 /* ------------------------------------------------------------------ */
-
-function NodeRow({ label, hint }: { label: string; hint: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2 md:py-1">
-      <code className="text-[12.5px] md:text-[14px] font-mono text-[var(--color-sage-deep)]">
-        {label}
-      </code>
-      <span className="text-[12px] md:text-[13.5px] text-[var(--color-muted)] text-right">
-        {hint}
-      </span>
-    </div>
-  );
-}
 
 function WhyGraph({ title, body }: { title: string; body: string }) {
   return (
