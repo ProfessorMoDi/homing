@@ -15,6 +15,12 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Home,
+  Check,
+  X,
+  Scale,
+  ShieldCheck,
+  Calendar,
+  Coins,
 } from "lucide-react";
 import { Card } from "@/components/Bits";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
@@ -40,6 +46,9 @@ const SECTIONS: SectionDef[] = [
   { id: "nlp", label: "NLP" },
   { id: "graph", label: "Graph" },
   { id: "privacy", label: "Privacy" },
+  { id: "ethics", label: "Ethics" },
+  { id: "compliance", label: "Compliance" },
+  { id: "ship", label: "Ship" },
 ];
 
 export default function Theory() {
@@ -140,6 +149,9 @@ export default function Theory() {
         <NlpSlide />
         <GraphSlide />
         <PrivacySlide />
+        <PrinciplesSlide />
+        <ComplianceSlide />
+        <ShipSlide />
       </main>
 
       <FloatingNav active={active} goTo={goTo} />
@@ -705,7 +717,240 @@ function PrivacySlide() {
           />
         </Card>
       </div>
+    </Slide>
+  );
+}
 
+function PrinciplesSlide() {
+  return (
+    <Slide
+      id="ethics"
+      eyebrow="06 / Principles"
+      title="What HOMING refuses to do"
+      subtitle="Each refusal is a design choice. Together they're why this enables human connection instead of replacing or surveilling it — the BCG X brief made flesh."
+    >
+      <div className="grid gap-3 md:gap-4 mb-8 md:mb-10">
+        <PrincipleRow
+          rejected="Profile browsing or swiping"
+          replaced="Activity-first matching — you choose what to do, the graph finds people who said they want the same thing."
+        />
+        <PrincipleRow
+          rejected="Public popularity scores or 'social capital'"
+          replaced="Match scores stay internal to the matching service. Users never rank or rate each other."
+        />
+        <PrincipleRow
+          rejected="An AI chatbot that replaces conversation"
+          replaced="Homi can draft the first message; you read it, edit it, send it. The chat is between humans from line one."
+        />
+        <PrincipleRow
+          rejected="Notifying people that someone declined them"
+          replaced="Declines are private and invisible to the declined side. No signal, no read-receipt, no shame."
+        />
+        <PrincipleRow
+          rejected="Engagement-time as the success metric"
+          replaced="Success is the group meeting without us. The /group screen literally invites you to start a WhatsApp."
+        />
+        <PrincipleRow
+          rejected="Mixing 16-17 year olds with adults in the same pool"
+          replaced="EUR pilot is 18-29 only. A younger track needs separate safeguarding before it ships."
+        />
+      </div>
+
+      <div className="rounded-3xl bg-[var(--color-sage)] text-white px-5 md:px-8 py-5 md:py-7">
+        <p className="text-[14px] md:text-[18px] leading-snug">
+          <span className="opacity-70">The boundary isn&apos;t a feature list.</span>{" "}
+          It&apos;s the product.
+        </p>
+      </div>
+    </Slide>
+  );
+}
+
+function ComplianceSlide() {
+  return (
+    <Slide
+      id="compliance"
+      eyebrow="07 / Compliance"
+      title="GDPR and the AI Act, by design"
+      subtitle="The architecture above is also the compliance story. Privacy by design means we satisfy these obligations as a side-effect of how the system is built — not as a bolt-on."
+    >
+      <div className="grid lg:grid-cols-3 gap-4 md:gap-5 mb-7 md:mb-9">
+        <ComplianceCol
+          icon={<Scale size={18} />}
+          title="GDPR"
+          articles={[
+            {
+              ref: "Art 6(1)(a)",
+              point: "Explicit consent",
+              body: "Granular, revocable per data class — voice recording, topics, matching, availability are separate toggles.",
+            },
+            {
+              ref: "Art 17",
+              point: "Right to erasure",
+              body: "Deleting a :User node cascades :LIKES, :AVAILABLE_AT and :AVOID edges in one transaction.",
+            },
+            {
+              ref: "Art 20",
+              point: "Portability",
+              body: "JSON export of every node and edge the user authored, downloadable from settings.",
+            },
+            {
+              ref: "Art 25",
+              point: "Privacy by design",
+              body: "On-device transcription, anonymous-until-verified flow, no profile browsing.",
+            },
+          ]}
+        />
+        <ComplianceCol
+          icon={<Brain size={18} />}
+          title="AI Act"
+          articles={[
+            {
+              ref: "Risk tier",
+              point: "Limited-risk system",
+              body: "Used to assist matching, not to grade or rank humans. Final action is always the user&apos;s.",
+            },
+            {
+              ref: "Art 50",
+              point: "Transparency",
+              body: "Every Homi suggestion is labeled. Users see the topics extracted and can edit them before anything is used.",
+            },
+            {
+              ref: "Provider",
+              point: "Zero data retention",
+              body: "LLM provider contract: no training on prompts, no log retention beyond 24h.",
+            },
+            {
+              ref: "Bias audit",
+              point: "Quarterly review",
+              body: "Match outcomes audited by sex / language / faculty cohort. Findings published.",
+            },
+          ]}
+        />
+        <ComplianceCol
+          icon={<ShieldCheck size={18} />}
+          title="Operations"
+          articles={[
+            {
+              ref: "Role",
+              point: "DPO from day one",
+              body: "Designated Data Protection Officer reports directly to the founders.",
+            },
+            {
+              ref: "DPIA",
+              point: "Before public launch",
+              body: "Data Protection Impact Assessment, reviewed with the EUR data office.",
+            },
+            {
+              ref: "Audit",
+              point: "Annual security audit",
+              body: "Third-party penetration test + report; remediation tracked publicly.",
+            },
+            {
+              ref: "List",
+              point: "Public sub-processor list",
+              body: "Every vendor that touches data is named in the privacy policy with a 30-day change notice.",
+            },
+          ]}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-cream-warm)] p-4 md:p-5 flex items-start gap-3">
+        <ShieldCheck
+          size={18}
+          className="text-[var(--color-sage-deep)] shrink-0 mt-0.5"
+        />
+        <p className="text-[13px] md:text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
+          We classify as <span className="font-medium">limited-risk</span> under
+          the AI Act because the model assists with matching but the final
+          action — accept, decline, verify, meet — is always a human decision.
+          We publish the DPIA, the bias audit, and the sub-processor list
+          before opening enrollment.
+        </p>
+      </div>
+    </Slide>
+  );
+}
+
+function ShipSlide() {
+  const items: BudgetItem[] = [
+    { label: "Team · 4 eng + DPO + designer × 18mo", amount: 1_100_000, tone: "sage" },
+    { label: "Compliance · DPO, DPIA, legal, audits", amount: 250_000, tone: "sky" },
+    { label: "Infra · cloud, LLM, verification provider", amount: 150_000, tone: "clay" },
+    { label: "Pilot · launch, content, EUR partnership", amount: 200_000, tone: "sand" },
+    { label: "Reserve · contingency + edge-case scope", amount: 300_000, tone: "sage" },
+  ];
+  const total = items.reduce((sum, i) => sum + i.amount, 0);
+
+  return (
+    <Slide
+      id="ship"
+      eyebrow="08 / Delivery"
+      title="€2M, 18 months, EUR-first"
+      subtitle="MVP at month 3. Closed EUR pilot at month 6. Three to four Dutch universities by month 18 — under budget and politically survivable."
+    >
+      {/* Top stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-10">
+        <ShipStat value="€2.0M" caption="Total budget" tone="sage" />
+        <ShipStat value="18mo" caption="To 4-uni rollout" tone="sky" />
+        <ShipStat value="6 FTE" caption="Eng · DPO · design" tone="clay" />
+        <ShipStat value="4 uni" caption="Dutch network · M18" tone="sand" />
+      </div>
+
+      {/* Budget breakdown + roadmap */}
+      <div className="grid lg:grid-cols-2 gap-6 lg:gap-10 mb-8 md:mb-10">
+        <Card className="!p-5 md:!p-7">
+          <div className="flex items-center gap-2 mb-4 md:mb-5">
+            <Coins size={16} className="text-[var(--color-sage-deep)]" />
+            <p className="text-[13px] md:text-[15px] font-medium">
+              Budget · 18 months
+            </p>
+          </div>
+          <div className="grid gap-3 md:gap-3.5 mb-4">
+            {items.map((it) => (
+              <BudgetRow key={it.label} item={it} total={total} />
+            ))}
+          </div>
+          <div className="pt-3 border-t border-[var(--color-line)] flex justify-between items-baseline">
+            <p className="text-[13px] md:text-[15px] font-medium">Total</p>
+            <p className="text-[16px] md:text-[20px] display text-[var(--color-sage-deep)]">
+              €{(total / 1_000_000).toFixed(1)}M
+            </p>
+          </div>
+        </Card>
+
+        <Card className="!p-5 md:!p-7">
+          <div className="flex items-center gap-2 mb-4 md:mb-5">
+            <Calendar size={16} className="text-[var(--color-sage-deep)]" />
+            <p className="text-[13px] md:text-[15px] font-medium">Roadmap</p>
+          </div>
+          <div className="grid gap-3.5 md:gap-4">
+            <Milestone
+              range="M1–3"
+              title="Production MVP"
+              body="The flow you saw — voice in, topics, match, verify — hardened, monitored, documented. No public users yet."
+            />
+            <Milestone
+              range="M4–6"
+              title="Closed EUR pilot · 50 students"
+              body="Hand-picked across faculties. DPIA finalised. Weekly cadence. We measure outcomes, not screens."
+            />
+            <Milestone
+              range="M7–12"
+              title="EUR open + audited"
+              body="Public to all EUR students. DPIA + bias audit published. Security review by a third party."
+            />
+            <Milestone
+              range="M13–18"
+              title="3–4 Dutch universities"
+              body="TU Delft, Leiden, Utrecht, Wageningen. Same product, university-scoped graphs."
+              last
+            />
+          </div>
+        </Card>
+      </div>
+
+      {/* Closing CTA — final word of the deck */}
       <div className="rounded-3xl bg-[var(--color-sage)] text-white px-6 md:px-10 py-8 md:py-12 text-center">
         <p className="text-[11px] md:text-[13px] uppercase tracking-[0.2em] opacity-80 mb-3">
           Built for the EUR hackathon
@@ -740,6 +985,203 @@ function PrivacySlide() {
 /* ------------------------------------------------------------------ */
 /*  Small bits used inside slides                                      */
 /* ------------------------------------------------------------------ */
+
+function PrincipleRow({
+  rejected,
+  replaced,
+}: {
+  rejected: string;
+  replaced: string;
+}) {
+  return (
+    <div className="grid lg:grid-cols-2 gap-2.5 md:gap-3 items-stretch">
+      <div className="rounded-2xl border border-[var(--color-clay-soft)] bg-white p-4 md:p-5 flex items-start gap-3">
+        <span className="grid place-items-center h-7 w-7 md:h-8 md:w-8 rounded-full bg-[var(--color-clay-soft)] text-[#7d4730] shrink-0 mt-0.5">
+          <X size={14} strokeWidth={3} />
+        </span>
+        <div>
+          <p className="text-[10px] md:text-[11.5px] uppercase tracking-[0.18em] text-[#7d4730] font-medium mb-1">
+            Won&apos;t do
+          </p>
+          <p className="text-[13.5px] md:text-[15.5px] text-[var(--color-ink)] leading-snug">
+            {rejected}
+          </p>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-[var(--color-sage-soft)] bg-[var(--color-sage-soft)] p-4 md:p-5 flex items-start gap-3">
+        <span className="grid place-items-center h-7 w-7 md:h-8 md:w-8 rounded-full bg-white text-[var(--color-sage-deep)] shrink-0 mt-0.5">
+          <Check size={14} strokeWidth={3} />
+        </span>
+        <div>
+          <p className="text-[10px] md:text-[11.5px] uppercase tracking-[0.18em] text-[var(--color-sage-deep)] font-medium mb-1">
+            Instead
+          </p>
+          <p className="text-[13.5px] md:text-[15.5px] text-[var(--color-sage-deep)] leading-snug">
+            {replaced}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ComplianceArticle {
+  ref: string;
+  point: string;
+  body: string;
+}
+
+function ComplianceCol({
+  icon,
+  title,
+  articles,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  articles: ComplianceArticle[];
+}) {
+  return (
+    <Card className="!p-5 md:!p-6 flex flex-col">
+      <div className="flex items-center gap-2 mb-4 md:mb-5">
+        <span className="grid place-items-center h-9 w-9 rounded-2xl bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]">
+          {icon}
+        </span>
+        <p className="text-[15px] md:text-[17px] font-medium">{title}</p>
+      </div>
+      <div className="grid gap-3.5 md:gap-4">
+        {articles.map((a) => (
+          <div key={a.ref}>
+            <div className="flex items-baseline gap-2 mb-0.5">
+              <span className="font-mono text-[10.5px] md:text-[11.5px] uppercase tracking-wider text-[var(--color-sage-deep)]">
+                {a.ref}
+              </span>
+              <span className="text-[12.5px] md:text-[14px] font-medium">
+                {a.point}
+              </span>
+            </div>
+            <p className="text-[12.5px] md:text-[14px] text-[var(--color-ink-soft)] leading-relaxed">
+              {a.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+interface BudgetItem {
+  label: string;
+  amount: number;
+  tone: "sage" | "sky" | "clay" | "sand";
+}
+
+const TONE_BG: Record<BudgetItem["tone"], string> = {
+  sage: "var(--color-sage)",
+  sky: "#8fb3c9",
+  clay: "#c97e63",
+  sand: "#b8975f",
+};
+
+function BudgetRow({ item, total }: { item: BudgetItem; total: number }) {
+  const pct = Math.round((item.amount / total) * 100);
+  const amountStr =
+    item.amount >= 1_000_000
+      ? `€${(item.amount / 1_000_000).toFixed(1)}M`
+      : `€${(item.amount / 1_000).toFixed(0)}K`;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <span className="text-[12.5px] md:text-[14px] text-[var(--color-ink-soft)]">
+          {item.label}
+        </span>
+        <span className="text-[12.5px] md:text-[14px] tabular-nums font-medium shrink-0">
+          {amountStr}{" "}
+          <span className="text-[var(--color-muted)] font-normal">· {pct}%</span>
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-[var(--color-line)] overflow-hidden">
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${pct}%`,
+            background: TONE_BG[item.tone],
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Milestone({
+  range,
+  title,
+  body,
+  last,
+}: {
+  range: string;
+  title: string;
+  body: string;
+  last?: boolean;
+}) {
+  return (
+    <div className="flex gap-3 md:gap-4">
+      <div className="flex flex-col items-center shrink-0">
+        <span className="font-mono text-[11px] md:text-[12.5px] text-[var(--color-sage-deep)] bg-[var(--color-sage-soft)] px-2 py-1 rounded-full">
+          {range}
+        </span>
+        {!last && (
+          <div className="flex-1 w-px bg-[var(--color-line)] mt-1.5" />
+        )}
+      </div>
+      <div className={"flex-1 " + (last ? "" : "pb-1")}>
+        <p className="text-[14px] md:text-[15.5px] font-medium leading-tight mb-1">
+          {title}
+        </p>
+        <p className="text-[12.5px] md:text-[14px] text-[var(--color-ink-soft)] leading-relaxed">
+          {body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const SHIP_STAT_TONES: Record<BudgetItem["tone"], { bg: string; fg: string }> = {
+  sage: { bg: "var(--color-sage-soft)", fg: "var(--color-sage-deep)" },
+  sky:  { bg: "var(--color-sky-soft)",  fg: "#3b5a73" },
+  clay: { bg: "var(--color-clay-soft)", fg: "#7d4730" },
+  sand: { bg: "var(--color-sand)",      fg: "#6a5326" },
+};
+
+function ShipStat({
+  value,
+  caption,
+  tone,
+}: {
+  value: string;
+  caption: string;
+  tone: BudgetItem["tone"];
+}) {
+  const palette = SHIP_STAT_TONES[tone];
+  return (
+    <div
+      className="rounded-2xl p-4 md:p-5 text-center"
+      style={{ background: palette.bg, color: palette.fg }}
+    >
+      <p
+        className="display text-[26px] md:text-[36px] lg:text-[42px] leading-none"
+        style={{ color: palette.fg }}
+      >
+        {value}
+      </p>
+      <p
+        className="text-[11px] md:text-[12.5px] uppercase tracking-[0.14em] mt-2 md:mt-2.5 opacity-85"
+        style={{ color: palette.fg }}
+      >
+        {caption}
+      </p>
+    </div>
+  );
+}
 
 function WhyGraph({ title, body }: { title: string; body: string }) {
   return (
