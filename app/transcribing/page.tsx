@@ -28,19 +28,9 @@ interface Slide {
 
 const SLIDES: Slide[] = [
   {
-    eyebrow: "The shape",
-    title: "Activity first. Profile never.",
-    body: "HOMING starts from what you actually enjoy, not who you'd like to meet. No swiping, no profile browsing, no popularity scores.",
-  },
-  {
     eyebrow: "Random fact",
     title: "Homing pigeons can navigate 1,800 km home.",
     body: "They use the Earth's magnetic field and a small bias toward roads. Homi just wanted to be the mascot.",
-  },
-  {
-    eyebrow: "Anonymous matching",
-    title: "Verified before details.",
-    body: "Names, photos, and the exact venue stay hidden until everyone in the group passes a quick check.",
   },
   {
     eyebrow: "Random fact",
@@ -48,19 +38,9 @@ const SLIDES: Slide[] = [
     body: "They also pass basic shape-sorting tests. The 'rats with wings' meme is rude and statistically wrong.",
   },
   {
-    eyebrow: "Atomic by design",
-    title: "Cooking and Korean food are two different topics.",
-    body: "Each interest stands on its own. Edit, hide, or remove anything Homi heard — your call.",
-  },
-  {
     eyebrow: "Random fact",
     title: "A pigeon once saved a thousand soldiers.",
     body: "G.I. Joe flew 32 km in 20 minutes carrying a message that cancelled a bombing in 1943. Homi has not received a medal yet.",
-  },
-  {
-    eyebrow: "Quiet by default",
-    title: "You only edit the activity.",
-    body: "Homi handles who to ask. Declines are private. Nobody gets a notification because you said no.",
   },
   {
     eyebrow: "Random fact",
@@ -68,19 +48,14 @@ const SLIDES: Slide[] = [
     body: "The first chapter of On the Origin of Species is entirely about pigeon breeding. Homi finds this very validating.",
   },
   {
-    eyebrow: "Privacy by design",
-    title: "Audio never leaves your phone.",
-    body: "In the production build, transcription runs on-device. We don't store ID documents, selfies, or your legal name.",
+    eyebrow: "Random fact",
+    title: "Pigeons can count up to nine.",
+    body: "Lab studies in 2011 showed they distinguish small quantities about as well as primates. Still bad at sharing chips.",
   },
   {
     eyebrow: "Random fact",
-    title: "Erasmus wrote a book on friendship in 1500.",
-    body: "It runs over 800 pages. We're basically the app version, minus the Latin and the elaborate insults.",
-  },
-  {
-    eyebrow: "Success",
-    title: "Built to be deleted.",
-    body: "A good outcome is the group keeps meeting without us. We measure for that, not screen time.",
+    title: "Pigeons mate for life.",
+    body: "They co-raise their chicks and recognise each other by voice. They also hold mild grudges. Same.",
   },
   {
     eyebrow: "Random fact",

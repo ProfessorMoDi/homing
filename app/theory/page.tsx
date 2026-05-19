@@ -397,7 +397,7 @@ function StackSlide() {
           tone="sage"
           icon={<Mic size={32} />}
           name="Voice in"
-          tech="MediaRecorder · Opus"
+          tech="MediaRecorder · ElevenLabs"
         />
         <DataArrow label="audio" />
         <StageBlock
@@ -405,7 +405,7 @@ function StackSlide() {
           tone="sky"
           icon={<Brain size={32} />}
           name="Make sense"
-          tech="Scribe · gpt-oss"
+          tech="Ollama · gpt-oss"
         />
         <DataArrow label="topics" />
         <StageBlock
