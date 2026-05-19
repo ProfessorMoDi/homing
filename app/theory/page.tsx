@@ -21,6 +21,9 @@ import {
   ShieldCheck,
   Calendar,
   Coins,
+  Code2,
+  UserCheck,
+  FileCheck,
 } from "lucide-react";
 import { Card } from "@/components/Bits";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
@@ -383,12 +386,12 @@ function StackSlide() {
   return (
     <Slide
       id="stack"
-      eyebrow="01 / Architecture"
+      eyebrow="00 / Summary"
       title="From a 90-second voice note to a real meet-up"
-      subtitle="Four stages. Each stage transforms what it gets, then writes the result to the graph."
+      subtitle="One slide. Four pipelines. Three providers. One graph. Everything below is a visual you can point at."
     >
-      {/* Big visual process strip */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-2 lg:gap-1 items-stretch mb-8 md:mb-10">
+      {/* Pipeline visual */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] gap-2 lg:gap-1 items-stretch mb-6 md:mb-8">
         <StageBlock
           number="01"
           tone="sage"
@@ -422,6 +425,13 @@ function StackSlide() {
         />
       </div>
 
+      {/* Three visual panels: API + LLM, Database, Security */}
+      <div className="grid lg:grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
+        <ApiFlowPanel />
+        <SchemaPreviewPanel />
+        <SecurityZonesPanel />
+      </div>
+
       {/* Graph-as-spine callout (compact) */}
       <div className="rounded-3xl bg-[var(--color-cream-warm)] border border-[var(--color-line)] p-4 md:p-5">
         <div className="flex items-center gap-3 md:gap-4">
@@ -441,11 +451,317 @@ function StackSlide() {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Summary-slide panels — three visuals, no prose                     */
+/* ------------------------------------------------------------------ */
+
+function ApiFlowPanel() {
+  return (
+    <Card className="!p-4 md:!p-5 flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-3 md:mb-4">
+        <span className="grid place-items-center h-9 w-9 rounded-2xl bg-[var(--color-sky-soft)] text-[#3b5a73]">
+          <Code2 size={16} />
+        </span>
+        <p className="text-[13px] md:text-[15px] font-medium">API + LLM calls</p>
+      </div>
+
+      <svg
+        viewBox="0 0 320 180"
+        className="w-full h-auto"
+        role="img"
+        aria-label="HOMING client calls three endpoints — transcribe goes to ElevenLabs Scribe, analyze and suggest both go to Ollama gpt-oss:120b."
+      >
+        {/* Connector curves: client → providers */}
+        <path
+          d="M 92 56 C 150 56, 160 32, 212 32"
+          stroke="#3b5a73"
+          strokeWidth="1.5"
+          fill="none"
+        />
+        <path
+          d="M 92 90 C 150 90, 160 92, 212 92"
+          stroke="#4f7942"
+          strokeWidth="1.5"
+          fill="none"
+        />
+        <path
+          d="M 92 124 C 150 124, 160 152, 212 152"
+          stroke="#4f7942"
+          strokeWidth="1.5"
+          fill="none"
+        />
+
+        {/* Endpoint labels above each curve */}
+        <text x="150" y="22" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#3b5a73">
+          POST /api/transcribe
+        </text>
+        <text x="150" y="82" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#2f4926">
+          POST /api/analyze
+        </text>
+        <text x="150" y="142" fontSize="9.5" fontFamily="ui-monospace, monospace" fill="#2f4926">
+          POST /api/suggest
+        </text>
+
+        {/* Client node */}
+        <rect x="14" y="62" width="78" height="56" rx="14" fill="#1b1d1c" />
+        <text x="53" y="86" textAnchor="middle" fontSize="11" fill="white" fontWeight="600" fontFamily="ui-sans-serif, system-ui">
+          HOMING
+        </text>
+        <text x="53" y="100" textAnchor="middle" fontSize="9" fill="white" opacity="0.7" fontFamily="ui-monospace, monospace">
+          :client
+        </text>
+
+        {/* Provider nodes */}
+        <rect x="212" y="14" width="96" height="36" rx="10" fill="#dbe7ee" stroke="#3b5a73" strokeWidth="1.2" />
+        <text x="260" y="30" textAnchor="middle" fontSize="11" fontWeight="600" fill="#3b5a73" fontFamily="ui-sans-serif, system-ui">
+          ElevenLabs
+        </text>
+        <text x="260" y="42" textAnchor="middle" fontSize="9" fill="#3b5a73" opacity="0.85" fontFamily="ui-monospace, monospace">
+          Scribe · v1
+        </text>
+
+        <rect x="212" y="74" width="96" height="36" rx="10" fill="#e0e9d6" stroke="#4f7942" strokeWidth="1.2" />
+        <text x="260" y="90" textAnchor="middle" fontSize="11" fontWeight="600" fill="#2f4926" fontFamily="ui-sans-serif, system-ui">
+          Ollama
+        </text>
+        <text x="260" y="102" textAnchor="middle" fontSize="9" fill="#2f4926" opacity="0.85" fontFamily="ui-monospace, monospace">
+          gpt-oss:120b
+        </text>
+
+        <rect x="212" y="134" width="96" height="36" rx="10" fill="#e0e9d6" stroke="#4f7942" strokeWidth="1.2" />
+        <text x="260" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="#2f4926" fontFamily="ui-sans-serif, system-ui">
+          Ollama
+        </text>
+        <text x="260" y="162" textAnchor="middle" fontSize="9" fill="#2f4926" opacity="0.85" fontFamily="ui-monospace, monospace">
+          gpt-oss:120b
+        </text>
+      </svg>
+
+      <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-[var(--color-line)]">
+        <PanelChip>json_object</PanelChip>
+        <PanelChip>0-day retention</PanelChip>
+        <PanelChip>on-device fallback</PanelChip>
+      </div>
+    </Card>
+  );
+}
+
+function SchemaPreviewPanel() {
+  return (
+    <Card className="!p-4 md:!p-5 flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-3 md:mb-4">
+        <span className="grid place-items-center h-9 w-9 rounded-2xl bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]">
+          <Database size={16} />
+        </span>
+        <p className="text-[13px] md:text-[15px] font-medium">Graph schema</p>
+      </div>
+
+      <svg
+        viewBox="0 0 280 180"
+        className="w-full h-auto"
+        role="img"
+        aria-label="Schema graph: Activity connects to Topic via REQUIRES and to TimeSlot via SCHEDULED_AT. User connects to Topic via LIKES and to TimeSlot via AVAILABLE_AT. Users connect to each other via private AVOID edges."
+      >
+        {/* Edges */}
+        <line x1="140" y1="36" x2="60" y2="90" stroke="#4f7942" strokeWidth="1.6" />
+        <text x="80" y="58" fontSize="8.5" fontFamily="ui-monospace, monospace" fill="#2f4926">
+          :REQUIRES
+        </text>
+
+        <line x1="140" y1="36" x2="220" y2="90" stroke="#3b5a73" strokeWidth="1.4" strokeDasharray="4 3" />
+        <text x="174" y="58" fontSize="8.5" fontFamily="ui-monospace, monospace" fill="#3b5a73">
+          :SCHEDULED_AT
+        </text>
+
+        <line x1="140" y1="146" x2="60" y2="90" stroke="#8a8a85" strokeWidth="1.2" />
+        <text x="76" y="128" fontSize="8.5" fontFamily="ui-monospace, monospace" fill="#8a8a85">
+          :LIKES
+        </text>
+
+        <line x1="140" y1="146" x2="220" y2="90" stroke="#b8975f" strokeWidth="1.2" strokeDasharray="3 3" />
+        <text x="170" y="128" fontSize="8.5" fontFamily="ui-monospace, monospace" fill="#8a7438">
+          :AVAILABLE_AT
+        </text>
+
+        {/* AVOID self-loop on user */}
+        <path
+          d="M 165 152 C 200 175, 168 175, 152 162"
+          stroke="#c97e63"
+          strokeWidth="1.2"
+          strokeDasharray="2 3"
+          fill="none"
+        />
+        <text x="178" y="174" fontSize="8.5" fontFamily="ui-monospace, monospace" fill="#7d4730">
+          :AVOID
+        </text>
+
+        {/* Nodes */}
+        <SchemaNode x={140} y={28} w={88} h={26} fill="#4f7942" stroke="#2f4926" textFill="white" label=":Activity" />
+        <SchemaNode x={60}  y={90} w={70} h={24} fill="#e0e9d6" stroke="#4f7942" textFill="#2f4926" label=":Topic" />
+        <SchemaNode x={220} y={90} w={80} h={24} fill="#ead9bf" stroke="#b8975f" textFill="#6a5326" label=":TimeSlot" />
+        <SchemaNode x={140} y={152} w={66} h={26} fill="#ffffff" stroke="#8fb3c9" textFill="#1b1d1c" label=":User" />
+      </svg>
+
+      <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-[var(--color-line)]">
+        <PanelChip>4 node types</PanelChip>
+        <PanelChip>5 edge types</PanelChip>
+        <PanelChip>multi-hop ready</PanelChip>
+      </div>
+    </Card>
+  );
+}
+
+function SchemaNode({
+  x,
+  y,
+  w,
+  h,
+  fill,
+  stroke,
+  textFill,
+  label,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fill: string;
+  stroke: string;
+  textFill: string;
+  label: string;
+}) {
+  return (
+    <g>
+      <rect
+        x={x - w / 2}
+        y={y - h / 2}
+        width={w}
+        height={h}
+        rx={h / 2}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth="1.4"
+      />
+      <text
+        x={x}
+        y={y + 4}
+        textAnchor="middle"
+        fontSize="11"
+        fill={textFill}
+        fontWeight="600"
+        fontFamily="ui-monospace, monospace"
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
+function SecurityZonesPanel() {
+  return (
+    <Card className="!p-4 md:!p-5 flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-3 md:mb-4">
+        <span className="grid place-items-center h-9 w-9 rounded-2xl bg-[var(--color-clay-soft)] text-[#7d4730]">
+          <ShieldCheck size={16} />
+        </span>
+        <p className="text-[13px] md:text-[15px] font-medium">
+          Security & GDPR
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <ZoneCol
+          tone="device"
+          icon={<Cpu size={14} />}
+          title="Device"
+          items={["audio", "Whisper", "edits"]}
+        />
+        <ZoneCol
+          tone="server"
+          icon={<Cloud size={14} />}
+          title="Server"
+          items={["topics", "verified"]}
+        />
+        <ZoneCol
+          tone="never"
+          icon={<X size={14} />}
+          title="Never"
+          items={["ID doc", "selfie", "legal name"]}
+        />
+      </div>
+
+      <div className="grid gap-1.5 mt-auto">
+        <SecRow icon={<Lock size={12} />} label="Privacy by design · GDPR Art 25" />
+        <SecRow icon={<UserCheck size={12} />} label="DPO from day one" />
+        <SecRow icon={<FileCheck size={12} />} label="DPIA before public launch" />
+        <SecRow icon={<Brain size={12} />} label="AI Act · limited-risk · Art 50" />
+      </div>
+    </Card>
+  );
+}
+
+function ZoneCol({
+  tone,
+  icon,
+  title,
+  items,
+}: {
+  tone: "device" | "server" | "never";
+  icon: React.ReactNode;
+  title: string;
+  items: string[];
+}) {
+  const palette = {
+    device: { bg: "var(--color-sage-soft)", fg: "var(--color-sage-deep)" },
+    server: { bg: "var(--color-sky-soft)", fg: "#3b5a73" },
+    never:  { bg: "var(--color-clay-soft)", fg: "#7d4730" },
+  }[tone];
+  return (
+    <div
+      className="rounded-xl px-2 py-2.5"
+      style={{ background: palette.bg, color: palette.fg }}
+    >
+      <div className="flex items-center gap-1.5 mb-1.5">
+        {icon}
+        <p className="text-[10.5px] uppercase tracking-[0.14em] font-medium">
+          {title}
+        </p>
+      </div>
+      <ul className="grid gap-0.5 text-[10.5px] md:text-[11.5px] font-mono">
+        {items.map((it) => (
+          <li key={it}>{it}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SecRow({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="grid place-items-center h-5 w-5 rounded-full bg-[var(--color-cream-warm)] text-[var(--color-sage-deep)] shrink-0">
+        {icon}
+      </span>
+      <span className="text-[11.5px] md:text-[12.5px] text-[var(--color-ink-soft)]">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function PanelChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[10px] md:text-[11px] font-mono text-[var(--color-muted)] bg-[var(--color-cream-warm)] px-2 py-0.5 rounded-full">
+      {children}
+    </span>
+  );
+}
+
 function AudioSlide() {
   return (
     <Slide
       id="audio"
-      eyebrow="02 / Pipeline"
+      eyebrow="01 / Pipeline"
       title="Voice → Transcript"
       subtitle="We treat the recording as ephemeral. Audio bytes live only as long as they need to."
     >
@@ -522,7 +838,7 @@ function NlpSlide() {
   return (
     <Slide
       id="nlp"
-      eyebrow="03 / Pipeline"
+      eyebrow="02 / Pipeline"
       title="Transcript → Atomic topics"
       subtitle="The model has one job: split what you said into separable interests so the graph can index each one independently."
     >
@@ -599,7 +915,7 @@ function GraphSlide() {
   return (
     <Slide
       id="graph"
-      eyebrow="04 / Pipeline"
+      eyebrow="03 / Pipeline"
       title="Topics → People"
       subtitle="Interests are many-to-many, friendship is sparse, and avoid-pairs are private. That's a graph problem, not a SQL one."
     >
@@ -642,7 +958,7 @@ function PrivacySlide() {
   return (
     <Slide
       id="privacy"
-      eyebrow="05 / Boundaries"
+      eyebrow="04 / Boundaries"
       title="Where the data lives"
       subtitle="We log only what makes the next match better. ID documents and selfies never touch our storage."
     >
@@ -725,7 +1041,7 @@ function PrinciplesSlide() {
   return (
     <Slide
       id="ethics"
-      eyebrow="06 / Principles"
+      eyebrow="05 / Principles"
       title="What HOMING refuses to do"
       subtitle="Each refusal is a design choice. Together they're why this enables human connection instead of replacing or surveilling it — the BCG X brief made flesh."
     >
@@ -770,7 +1086,7 @@ function ComplianceSlide() {
   return (
     <Slide
       id="compliance"
-      eyebrow="07 / Compliance"
+      eyebrow="06 / Compliance"
       title="GDPR and the AI Act, by design"
       subtitle="The architecture above is also the compliance story. Privacy by design means we satisfy these obligations as a side-effect of how the system is built — not as a bolt-on."
     >
@@ -885,7 +1201,7 @@ function ShipSlide() {
   return (
     <Slide
       id="ship"
-      eyebrow="08 / Delivery"
+      eyebrow="07 / Delivery"
       title="€2M, 18 months, EUR-first"
       subtitle="MVP at month 3. Closed EUR pilot at month 6. Three to four Dutch universities by month 18 — under budget and politically survivable."
     >
