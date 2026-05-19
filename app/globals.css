@@ -263,17 +263,64 @@
   50% { transform: translateY(-8px) rotate(1deg); }
 }
 
-@keyframes wing-flap {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.65); }
+/* Sky scene — parallax clouds + a single pigeon gliding a true bezier curve */
+
+@keyframes cloud-drift {
+  0%   { transform: translate3d(-130%, 0, 0); }
+  100% { transform: translate3d(700%, 0, 0); }
+}
+.animate-cloud-drift {
+  animation: cloud-drift var(--cloud-duration, 36s) linear infinite;
+  animation-delay: var(--cloud-delay, 0s);
+  will-change: transform;
 }
 
-@keyframes fly-across {
-  0% { transform: translate(-30%, 30%) rotate(-8deg); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(20%, -20%) rotate(6deg); }
-  90% { opacity: 1; }
-  100% { transform: translate(80%, 10%) rotate(-3deg); opacity: 0; }
+/*
+ * Pigeon glides along a cubic-bezier S-curve. Path coordinates are in pixels
+ * relative to the .pigeon-flight element's origin (top-left of the .scrim
+ * container, which is ~400-440px wide on the mobile frame).
+ *
+ *   M -40  170                    enter off-screen left, low
+ *   C  60   60, 180  80, 240 140  rise to a peak, dip back to mid
+ *   S 380   70, 480 140           smooth-S to another peak, exit off-screen right
+ */
+.pigeon-flight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  offset-path: path('M -40 170 C 60 60, 180 80, 240 140 S 380 70, 480 140');
+  -webkit-offset-path: path('M -40 170 C 60 60, 180 80, 240 140 S 380 70, 480 140');
+  offset-anchor: 50% 50%;
+  -webkit-offset-anchor: 50% 50%;
+  offset-rotate: 0deg;
+  -webkit-offset-rotate: 0deg;
+  animation: pigeon-flight-loop 14s ease-in-out infinite;
+  will-change: offset-distance, opacity;
+}
+@keyframes pigeon-flight-loop {
+  0%   { offset-distance: 0%; opacity: 0; }
+  7%   { opacity: 1; }
+  93%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+/*
+ * Independent tilt layer — slight nose-up on rises, nose-down on dips —
+ * timed to align roughly with the path's peaks and valleys.
+ */
+.pigeon-flight-tilt {
+  animation: pigeon-flight-tilt 14s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform;
+}
+@keyframes pigeon-flight-tilt {
+  0%   { transform: rotate(-4deg); }
+  20%  { transform: rotate(6deg); }
+  45%  { transform: rotate(-3deg); }
+  70%  { transform: rotate(7deg); }
+  100% { transform: rotate(-2deg); }
 }
 
 @keyframes pulse-ring {
@@ -297,8 +344,6 @@
 }
 
 .animate-float { animation: float-soft 4s ease-in-out infinite; }
-.animate-wing { animation: wing-flap 0.5s ease-in-out infinite; transform-origin: top center; }
-.animate-fly { animation: fly-across 9s ease-in-out infinite; }
 .animate-pulse-ring { animation: pulse-ring 1.6s ease-out infinite; }
 .animate-fade-up { animation: fade-up 0.4s ease-out both; }
 .animate-shimmer {
@@ -504,12 +549,13 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-float,
   .animate-pigeon-sway,
-  .animate-fly,
-  .animate-wing,
   .animate-pulse-ring,
   .animate-shimmer,
   .animate-slide-fill,
   .animate-live-pulse,
+  .animate-cloud-drift,
+  .pigeon-flight,
+  .pigeon-flight-tilt,
   .breathe-orb,
   .breathe-orb-2,
   .stagger > *,
@@ -523,6 +569,7 @@
     opacity: 1 !important;
     transform: none !important;
   }
+  .pigeon-flight { display: none; }
   .lift {
     transition: none;
   }

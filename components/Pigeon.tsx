@@ -38,13 +38,3 @@ export function PigeonMark({ size = 28 }: { size?: number }) {
     </span>
   );
 }
-
-export function FlyingPigeon({ className = "" }: { className?: string }) {
-  return (
-    <div className={`pointer-events-none absolute inset-0 ${className}`}>
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 animate-fly">
-        <Pigeon size={56} variant="flying" />
-      </div>
-    </div>
-  );
-}

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mic, Square, Sparkles, AlertCircle, FastForward } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Pigeon, FlyingPigeon } from "@/components/Pigeon";
+import { Pigeon } from "@/components/Pigeon";
+import { SkyScene } from "@/components/SkyScene";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { stashAudio } from "@/lib/audioStash";
@@ -223,13 +224,13 @@ export default function VoiceOnboarding() {
       </p>
 
       <div className="relative h-56 mb-6 overflow-hidden rounded-3xl scrim">
-        {recording && <FlyingPigeon />}
+        <SkyScene active={recording} />
         <div className="absolute inset-0 grid place-items-center">
           <div
             ref={pigeonAltitudeRef}
             style={{ willChange: "transform" }}
           >
-            <div className={recording ? "animate-float" : ""}>
+            <div className={recording ? "animate-float" : "animate-pigeon-sway"}>
               <Pigeon size={120} />
             </div>
           </div>
