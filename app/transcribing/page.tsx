@@ -143,9 +143,24 @@ function Connector({ active }: { active: boolean }) {
   );
 }
 
+function TranscribingFallback() {
+  return (
+    <div className="min-h-dvh flex items-center justify-center px-5">
+      <div className="text-center">
+        <div className="inline-block animate-float mb-3">
+          <Pigeon size={64} />
+        </div>
+        <p className="text-[13.5px] text-[var(--color-muted)]">
+          Homi is getting ready…
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function TranscribingPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<TranscribingFallback />}>
       <Transcribing />
     </Suspense>
   );
@@ -217,7 +232,13 @@ function Transcribing() {
         }
         return;
       }
-      runRealPipeline(audio.blob, audio.demoMode);
+      runRealPipeline(audio.blob, audio.demoMode).catch((e) => {
+        console.error("Pipeline crashed", e);
+        setErrMsg(
+          "Something tripped on the way through. Try again from the start.",
+        );
+        setStage(4);
+      });
       return;
     }
 

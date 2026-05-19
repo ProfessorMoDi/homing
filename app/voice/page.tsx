@@ -145,6 +145,14 @@ export default function VoiceOnboarding() {
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
+      recorder.onerror = (e) => {
+        console.error("MediaRecorder error", e);
+        setError(
+          "Recording hit a snag. Try again, or use the sample recording below.",
+        );
+        stream.getTracks().forEach((t) => t.stop());
+        setRecording(false);
+      };
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
@@ -164,19 +172,32 @@ export default function VoiceOnboarding() {
       router.push("/transcribing");
       return;
     }
-    const blob: Blob = await new Promise((resolve) => {
-      recorder.addEventListener(
-        "stop",
-        () => {
-          const out = new Blob(chunksRef.current, {
-            type: recorder.mimeType || "audio/webm",
-          });
-          resolve(out);
-        },
-        { once: true },
-      );
-      recorder.stop();
-    });
+    let blob: Blob;
+    try {
+      blob = await new Promise<Blob>((resolve, reject) => {
+        const onStop = () => {
+          recorder.removeEventListener("error", onError);
+          resolve(
+            new Blob(chunksRef.current, {
+              type: recorder.mimeType || "audio/webm",
+            }),
+          );
+        };
+        const onError = (e: Event) => {
+          recorder.removeEventListener("stop", onStop);
+          reject(e);
+        };
+        recorder.addEventListener("stop", onStop, { once: true });
+        recorder.addEventListener("error", onError, { once: true });
+        recorder.stop();
+      });
+    } catch (e) {
+      console.error("Stop failed", e);
+      setError("We couldn't finish the recording. Try again.");
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      setRecording(false);
+      return;
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
     stashAudio(blob, force);
