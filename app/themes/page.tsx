@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pencil, X, RotateCcw, Sparkles, Check } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import {
+  clearCached,
+  getCached,
   getOrFetchSuggestions,
-  hasCached,
   topicSignature,
   type RawSuggestedActivity,
 } from "@/lib/suggestionsCache";
@@ -28,11 +29,14 @@ export default function Themes() {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
   const [regen, setRegen] = useState<RegenStatus>("idle");
-  const lastSig = useRef<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   // Background regeneration of activity suggestions, keyed on a topic
   // signature. The module-level cache survives navigation and React Strict
   // Mode's double mount, so going back and forth never re-fires the request.
+  // We deliberately subscribe a fresh .then on every mount — the cache
+  // module's inflight dedup keeps the network call to one even though the
+  // effect runs twice under Strict Mode.
   useEffect(() => {
     const visibleTopics = state.topics
       .filter((t) => !t.hidden)
@@ -45,17 +49,23 @@ export default function Themes() {
     if (visibleTopics.length === 0) return;
 
     const sig = topicSignature(visibleTopics);
-    if (lastSig.current === sig) return; // no meaningful change since last run
-    lastSig.current = sig;
 
-    // Cache hit — show ready immediately, nothing to do.
-    if (hasCached(sig)) {
+    // Cache hit — apply synchronously. Survives Strict Mode and back-nav.
+    const cached = getCached(sig);
+    if (cached) {
+      setSuggestedActivities(cached);
       setRegen("ready");
       return;
     }
 
     let cancelled = false;
     setRegen("loading");
+
+    // Hard safety net — if Ollama/Vercel hang, drop to error after 25s so
+    // the user can retry instead of staring at a spinner.
+    const safety = setTimeout(() => {
+      if (!cancelled) setRegen("error");
+    }, 25000);
 
     getOrFetchSuggestions(sig, async () => {
       const r = await fetch("/api/suggest", {
@@ -78,17 +88,20 @@ export default function Themes() {
     })
       .then((activities) => {
         if (cancelled) return;
+        clearTimeout(safety);
         setSuggestedActivities(activities);
         setRegen("ready");
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        clearTimeout(safety);
         console.warn("Background suggest failed", err);
         setRegen("error");
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(safety);
     };
   }, [
     state.topics,
@@ -96,7 +109,22 @@ export default function Themes() {
     state.signup.availability,
     state.minorInterests,
     setSuggestedActivities,
+    retryTick,
   ]);
+
+  const onRetry = useCallback(() => {
+    const visibleTopics = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => ({
+        title: t.title,
+        explanation: t.explanation,
+        tags: t.tags,
+      }));
+    if (visibleTopics.length === 0) return;
+    clearCached(topicSignature(visibleTopics));
+    setRegen("idle");
+    setRetryTick((n) => n + 1);
+  }, [state.topics]);
 
   if (state.topics.length === 0) {
     return (
@@ -191,7 +219,7 @@ export default function Themes() {
 
       <div className="divider" />
 
-      <RegenBadge status={regen} />
+      <RegenBadge status={regen} onRetry={onRetry} />
 
       <PrimaryButton
         onClick={() => router.push("/suggestions")}
@@ -220,10 +248,16 @@ export default function Themes() {
   );
 }
 
-function RegenBadge({ status }: { status: RegenStatus }) {
+function RegenBadge({
+  status,
+  onRetry,
+}: {
+  status: RegenStatus;
+  onRetry: () => void;
+}) {
   if (status === "idle") return null;
   return (
-    <div className="mb-3 flex items-center justify-center">
+    <div className="mb-3 flex items-center justify-center gap-2">
       <span
         key={status}
         className={
@@ -232,7 +266,7 @@ function RegenBadge({ status }: { status: RegenStatus }) {
             ? "bg-[var(--color-cream-warm)] text-[var(--color-ink-soft)]"
             : status === "ready"
               ? "bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]"
-              : "bg-[var(--color-cream-warm)] text-[var(--color-muted)]")
+              : "bg-[var(--color-clay-soft)] text-[#7d4730]")
         }
       >
         {status === "loading" && (
@@ -251,10 +285,20 @@ function RegenBadge({ status }: { status: RegenStatus }) {
         {status === "error" && (
           <>
             <Sparkles size={12} />
-            Using your earlier suggestions
+            Homi couldn&apos;t finish — using earlier ideas
           </>
         )}
       </span>
+      {status === "error" && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[12px] text-[var(--color-sage-deep)] hover:bg-[var(--color-sage-soft)] transition-colors tap"
+        >
+          <RotateCcw size={11} />
+          Retry
+        </button>
+      )}
     </div>
   );
 }

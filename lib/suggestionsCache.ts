@@ -49,6 +49,11 @@ export function getCached(
   return cache.get(sig);
 }
 
+export function clearCached(sig: string): void {
+  cache.delete(sig);
+  inflight.delete(sig);
+}
+
 // Returns the cached promise if a request is already in flight for this
 // signature, so React Strict Mode's double mount only fires the network call
 // once.
