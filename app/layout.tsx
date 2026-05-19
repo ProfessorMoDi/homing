@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
 import { ClientShell } from "@/components/ClientShell";
+import { ChunkErrorRecovery } from "@/components/ChunkErrorRecovery";
 
 export const metadata: Metadata = {
   title: "HOMING — small real-life activities",
@@ -36,6 +37,7 @@ export default function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
+        <ChunkErrorRecovery />
         <AppProvider>
           <ClientShell>{children}</ClientShell>
         </AppProvider>
