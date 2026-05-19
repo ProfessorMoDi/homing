@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Heart, RotateCcw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
 import { useApp } from "@/lib/store";
+import { topicSignature, clearCached } from "@/lib/suggestionsCache";
 
 function activityNoun(title: string): string {
   const cleaned = title
@@ -35,8 +37,26 @@ function classify(state: ReturnType<typeof useApp>["state"]) {
 
 export default function FeedbackResult() {
   const { state } = useApp();
+  const router = useRouter();
   const outcome = classify(state);
   const noun = activityNoun(state.activity.title);
+
+  // Clears the cached suggestion set for the current topic signature so the
+  // next /themes visit refetches genuinely fresh ideas instead of replaying
+  // the same three cards.
+  function freshSimilar() {
+    const visibleTopics = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => ({
+        title: t.title,
+        explanation: t.explanation,
+        tags: t.tags,
+      }));
+    if (visibleTopics.length > 0) {
+      clearCached(topicSignature(visibleTopics));
+    }
+    router.push("/themes");
+  }
 
   return (
     <AppShell back="/feedback" title="Thanks">
@@ -55,10 +75,21 @@ export default function FeedbackResult() {
             Want to make {noun} a recurring thing?
           </p>
           <div className="grid gap-2 mb-7">
-            <PrimaryButton>Same people, same activity</PrimaryButton>
-            <SecondaryButton>Same people, try something similar</SecondaryButton>
-            <SecondaryButton>Keep me matched with some of them</SecondaryButton>
-            <button className="btn-ghost">Not now</button>
+            <PrimaryButton onClick={() => router.push("/group")}>
+              Same people, same activity
+            </PrimaryButton>
+            <SecondaryButton onClick={freshSimilar}>
+              Same people, try something similar
+            </SecondaryButton>
+            <SecondaryButton onClick={() => router.push("/dashboard")}>
+              Keep me matched with some of them
+            </SecondaryButton>
+            <button
+              className="btn-ghost"
+              onClick={() => router.push("/dashboard")}
+            >
+              Not now
+            </button>
           </div>
           <Link href="/group">
             <SecondaryButton>
@@ -77,9 +108,18 @@ export default function FeedbackResult() {
             HOMING can suggest another {noun} with some new people.
           </p>
           <div className="grid gap-2 mb-7">
-            <PrimaryButton>Try similar activity</PrimaryButton>
-            <SecondaryButton>Keep some matches</SecondaryButton>
-            <button className="btn-ghost">Not now</button>
+            <PrimaryButton onClick={freshSimilar}>
+              Try similar activity
+            </PrimaryButton>
+            <SecondaryButton onClick={() => router.push("/dashboard")}>
+              Keep some matches
+            </SecondaryButton>
+            <button
+              className="btn-ghost"
+              onClick={() => router.push("/dashboard")}
+            >
+              Not now
+            </button>
           </div>
         </>
       )}
