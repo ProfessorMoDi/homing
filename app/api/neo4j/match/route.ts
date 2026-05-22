@@ -6,6 +6,8 @@ export const maxDuration = 15;
 
 // Anchors on Activity→Topic→User so Neo4j traverses only relevant users,
 // not the full :User table. AVOID checked both directions before scoring.
+// Each WITH clause carries variables forward — aggregations are split into
+// separate WITH steps so results are available to the next expression.
 const MATCH_QUERY = `
 MATCH (a:Activity {id: $activityId})-[:REQUIRES]->(t:Topic)<-[:LIKES]-(u:User)
 WHERE u.id <> $creatorId
@@ -24,7 +26,8 @@ WITH a, u, specificHits, broaderHits, count(DISTINCT dt) AS dislikeHits
 WHERE dislikeHits = 0
 
 OPTIONAL MATCH (a)-[:SCHEDULED_AT]->(ts:TimeSlot)<-[:AVAILABLE_AT]-(u)
-WITH a, u, specificHits, broaderHits, count(DISTINCT ts) AS availHits,
+WITH a, u, specificHits, broaderHits,
+     count(DISTINCT ts) AS availHits,
      collect(DISTINCT ts.id) AS availSlots
 
 OPTIONAL MATCH (u)-[:COMFORTABLE_IN]->(lang:Language {id: toLower(a.language)})
@@ -32,25 +35,25 @@ WITH a, u, specificHits, broaderHits, availHits, availSlots,
      count(lang) AS langHits
 
 OPTIONAL MATCH (:User {id: $creatorId})-[pref:PREFERS_PERSON]->(u)
-WITH u, specificHits, broaderHits, availHits, availSlots, langHits,
-     count(pref) AS prefHits,
+WITH a, u, specificHits, broaderHits, availHits, availSlots, langHits,
+     count(pref) AS prefHits
 
-  CASE WHEN specificHits > 0 THEN 50 ELSE 0 END +
-  CASE WHEN specificHits = 0 AND broaderHits > 0 THEN 30 ELSE 0 END +
-  CASE
-    WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'thursday-evening') THEN 25
-    WHEN availHits > 0 AND any(s IN availSlots WHERE s IN ['every-weekend','friday-morning']) THEN 22
-    WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'weekday-evenings') THEN 18
-    WHEN (u)-[:AVAILABLE_AT]->(:TimeSlot {id: 'flexible'}) THEN 10
-    ELSE -15
-  END +
-  CASE WHEN langHits > 0 THEN 15 ELSE -10 END +
-  CASE WHEN u.commitment_appetite IN ['try-once','maybe-weekly'] THEN 6 ELSE 0 END +
-  CASE WHEN u.neighbourhood = a.location_area THEN 4 ELSE 0 END +
-  CASE WHEN prefHits > 0 THEN 10 ELSE 0 END
-  AS score
-
-RETURN u.id AS user_id, u.first_name AS first_name, score
+RETURN u.id AS user_id,
+       u.first_name AS first_name,
+       CASE WHEN specificHits > 0 THEN 50 ELSE 0 END +
+       CASE WHEN specificHits = 0 AND broaderHits > 0 THEN 30 ELSE 0 END +
+       CASE
+         WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'thursday-evening') THEN 25
+         WHEN availHits > 0 AND any(s IN availSlots WHERE s IN ['every-weekend','friday-morning']) THEN 22
+         WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'weekday-evenings') THEN 18
+         WHEN (u)-[:AVAILABLE_AT]->(:TimeSlot {id: 'flexible'}) THEN 10
+         ELSE -15
+       END +
+       CASE WHEN langHits > 0 THEN 15 ELSE -10 END +
+       CASE WHEN u.commitment_appetite IN ['try-once','maybe-weekly'] THEN 6 ELSE 0 END +
+       CASE WHEN u.neighbourhood = a.location_area THEN 4 ELSE 0 END +
+       CASE WHEN prefHits > 0 THEN 10 ELSE 0 END
+       AS score
 ORDER BY score DESC
 LIMIT 20
 `;
