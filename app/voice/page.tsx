@@ -18,7 +18,7 @@ function format(secs: number) {
 
 export default function VoiceOnboarding() {
   const router = useRouter();
-  const { loadSampleVoice } = useApp();
+  const { loadRandomArchetype } = useApp();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -206,7 +206,7 @@ export default function VoiceOnboarding() {
   }
 
   function onSample() {
-    loadSampleVoice();
+    loadRandomArchetype();
     router.push("/transcribing?sample=1");
   }
 

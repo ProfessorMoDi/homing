@@ -1,11 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
+import { useApp } from "@/lib/store";
 
 export default function Landing() {
+  const router = useRouter();
+  const { fillSignupRandom } = useApp();
+
+  function skipSignupDemo() {
+    fillSignupRandom();
+    router.push("/voice?sample=1");
+  }
   return (
     <div className="flex flex-col min-h-dvh">
       <div className="px-5 pt-6 flex items-center justify-between">
@@ -65,13 +74,14 @@ export default function Landing() {
             device.
           </PrivacyNote>
           <div className="text-center mt-1">
-            <Link
-              href="/voice"
+            <button
+              type="button"
+              onClick={skipSignupDemo}
               className="text-[11.5px] text-[var(--color-muted)] hover:text-[var(--color-ink-soft)] inline-flex items-center gap-1 transition-colors"
             >
-              Skip signup (demo)
+              Skip signup (demo with random profile)
               <ArrowRight size={11} />
-            </Link>
+            </button>
           </div>
         </div>
       </div>

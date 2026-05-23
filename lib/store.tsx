@@ -23,6 +23,13 @@ import {
 } from "./data";
 import { extractFromTranscript } from "./voiceTopics";
 import { persistAndMatch } from "./neo4jClient";
+import { currentUserContext, DEMO_ID } from "./currentUser";
+import {
+  fillSignupGaps,
+  pickArchetype,
+  TRANSCRIPT_VARIANTS,
+  type Archetype,
+} from "./archetypes";
 
 interface Signup {
   first_name: string;
@@ -105,10 +112,14 @@ interface LiveProfile {
   activities: SuggestedActivity[];
 }
 
-function suggestedToActivity(s: SuggestedActivity, i: number): Activity {
+function suggestedToActivity(
+  s: SuggestedActivity,
+  i: number,
+  creatorId: string = DEMO_ID,
+): Activity {
   return {
     id: `a_ai_${i}_${Date.now()}`,
-    creator_user_id: "u_me",
+    creator_user_id: creatorId,
     title: s.title,
     description: s.description,
     activity_type: "one-off",
@@ -132,6 +143,10 @@ interface Ctx {
   state: State;
   setSignup: (patch: Partial<Signup>) => void;
   loadSampleVoice: () => void;
+  /** Random archetype + transcript variant for skip paths. Patches only empty signup fields. */
+  loadRandomArchetype: () => void;
+  /** Patch only the still-empty signup fields with a random archetype. */
+  fillSignupRandom: () => void;
   setLiveTranscript: (transcript: string) => void;
   setLiveProfile: (transcript: string, profile: LiveProfile) => void;
   setSuggestedActivities: (suggestions: SuggestedActivity[]) => void;
@@ -214,6 +229,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // Apply a random archetype + its transcript variant. Fills only empty
+  // signup fields so a partial signup doesn't get clobbered. Used by the
+  // demo skip buttons so every demo run looks different in the graph.
+  const applyArchetype = useCallback((archetype: Archetype, opts: { signupOnly?: boolean } = {}) => {
+    setState((s) => {
+      const signupPatch = fillSignupGaps(s.signup, archetype);
+      const variant = TRANSCRIPT_VARIANTS[archetype.transcript_id];
+      const creatorId = currentUserContext({ ...s.signup, ...signupPatch }).id;
+      const next: State = {
+        ...s,
+        signup: { ...s.signup, ...signupPatch },
+      };
+      if (!opts.signupOnly) {
+        next.transcript = variant.transcript;
+        next.topics = variant.topics.map((t, i) => ({
+          id: `t_demo_${archetype.transcript_id}_${i}`,
+          title: t.title,
+          explanation: t.explanation,
+          tags: t.tags,
+        }));
+        next.minorInterests = [...variant.minor_interests];
+        next.activityTypes = [...variant.activity_types];
+        next.suggestedActivities = variant.activities.map((a, i) =>
+          suggestedToActivity(a, i, creatorId),
+        );
+      }
+      return next;
+    });
+  }, []);
+
+  const loadRandomArchetype = useCallback(() => {
+    applyArchetype(pickArchetype());
+  }, [applyArchetype]);
+
+  const fillSignupRandom = useCallback(() => {
+    applyArchetype(pickArchetype(), { signupOnly: true });
+  }, [applyArchetype]);
+
   const setLiveTranscript = useCallback((transcript: string) => {
     const extracted = extractFromTranscript(transcript);
     setState((s) => ({
@@ -230,8 +283,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setLiveProfile = useCallback(
     (transcript: string, profile: LiveProfile) => {
-      const generatedActivities = (profile.activities ?? []).map(
-        suggestedToActivity,
+      const creatorId = currentUserContext(state.signup).id;
+      const generatedActivities = (profile.activities ?? []).map((a, i) =>
+        suggestedToActivity(a, i, creatorId),
       );
       setState((s) => ({
         ...s,
@@ -258,13 +312,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setSuggestedActivities = useCallback(
     (suggestions: SuggestedActivity[]) => {
-      const mapped = suggestions.map(suggestedToActivity);
+      const creatorId = currentUserContext(state.signup).id;
+      const mapped = suggestions.map((s, i) =>
+        suggestedToActivity(s, i, creatorId),
+      );
       setState((s) => ({
         ...s,
         suggestedActivities: mapped,
       }));
     },
-    [],
+    [state.signup],
   );
 
   const updateTopic = useCallback((id: string, patch: Partial<Topic>) => {
@@ -347,6 +404,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     state,
     setSignup,
     loadSampleVoice,
+    loadRandomArchetype,
+    fillSignupRandom,
     setLiveTranscript,
     setLiveProfile,
     setSuggestedActivities,

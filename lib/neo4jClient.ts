@@ -9,8 +9,7 @@
 // fetch boilerplate.
 
 import type { Activity } from "./types";
-
-const CREATOR_ID = "u_me";
+import { DEMO_ID } from "./currentUser";
 
 export async function persistAndMatch(activity: Activity): Promise<void> {
   try {
@@ -31,7 +30,7 @@ export async function persistAndMatch(activity: Activity): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       activityId: activity.id,
-      creatorId: activity.creator_user_id || CREATOR_ID,
+      creatorId: activity.creator_user_id || DEMO_ID,
     }),
   }).catch(() => {});
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { AppShell, Section, StepDots } from "@/components/AppShell";
-import { ChipToggle, Label, PrimaryButton } from "@/components/Bits";
+import { ChipToggle, Label, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 
 const GENDER = [
@@ -39,7 +39,7 @@ const COMMIT = [
 const POSTCODE_RE = /^\d{4}\s?[A-Za-z]{2}$/;
 
 export default function SignUpDetails() {
-  const { state, setSignup } = useApp();
+  const { state, setSignup, fillSignupRandom } = useApp();
   const router = useRouter();
   const s = state.signup;
 
@@ -202,6 +202,11 @@ export default function SignUpDetails() {
       <PrimaryButton onClick={onContinue} disabled={!canContinue}>
         Continue to voice onboarding
       </PrimaryButton>
+      <div className="mt-2">
+        <SecondaryButton onClick={fillSignupRandom}>
+          Use random details (demo)
+        </SecondaryButton>
+      </div>
       <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
         You control what is used.
       </p>

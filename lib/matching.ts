@@ -114,7 +114,7 @@ export function rankCandidatesForActivity(
 
 export const defaultCatanActivity: Activity = {
   id: "a_catan_thu",
-  creator_user_id: "u_me",
+  creator_user_id: "u_demo",
   title: "Start a Catan round",
   description: "One game of Catan, low-pressure, near campus.",
   activity_type: "one-off",
@@ -135,7 +135,7 @@ export const defaultCatanActivity: Activity = {
 
 export const photoWalkActivity: Activity = {
   id: "a_photo_sat",
-  creator_user_id: "u_me",
+  creator_user_id: "u_demo",
   title: "Casual photo walk",
   description: "Slow Saturday walk through Kralingen with cameras.",
   activity_type: "one-off",
@@ -175,7 +175,7 @@ export const incomingInviteActivity: Activity = {
 
 export const musicActivity: Activity = {
   id: "a_music_fri",
-  creator_user_id: "u_me",
+  creator_user_id: "u_demo",
   title: "Music production mini-session",
   description: "Bring a laptop or just listen. Learn a thing or two together.",
   activity_type: "one-off",

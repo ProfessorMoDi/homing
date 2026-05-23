@@ -60,7 +60,7 @@ export default function Verify() {
     setTimeout(() => {
       setVerifying(false);
       setDone(true);
-      verifyUser("u_me");
+      verifyUser("u_demo");
     }, 1500);
   }
 

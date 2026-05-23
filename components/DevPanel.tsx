@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { devBus, useDevEvents, type DevEvent } from "../lib/devBus";
 import { useDevMode } from "../lib/devMode";
+import { useApp } from "../lib/store";
+import { currentUserContext } from "../lib/currentUser";
 import { Timeline } from "./devpanel/Timeline";
 import { CallDetail } from "./devpanel/CallDetail";
 import { PipelineNarrative } from "./devpanel/PipelineNarrative";
@@ -25,8 +27,19 @@ import { stageForUrl, type StageId } from "./devpanel/pipeline";
 export function DevPanel() {
   const events = useDevEvents();
   const { toggle } = useDevMode();
+  const { state } = useApp();
+  const userCtx = useMemo(() => currentUserContext(state.signup), [state.signup]);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [focusedStage, setFocusedStage] = useState<StageId | "auto">("auto");
+  const [clearing, setClearing] = useState(false);
+
+  async function clearDemo() {
+    setClearing(true);
+    try {
+      await fetch("/api/neo4j/demo-clear", { method: "POST" });
+    } catch {}
+    setClearing(false);
+  }
 
   // Drop a stale pin if its event scrolled out of the ring.
   useEffect(() => {
@@ -58,14 +71,40 @@ export function DevPanel() {
             live API trace · {events.length}/100
           </span>
         </div>
+        <div className="dev-panel__mode">
+          <span
+            className={`dev-panel__mode-badge ${
+              userCtx.demo
+                ? "dev-panel__mode-badge--demo"
+                : "dev-panel__mode-badge--live"
+            }`}
+            title={
+              userCtx.demo
+                ? "Demo mode — all writes tagged demo:true and isolated under u_demo"
+                : `Live mode — writes go under ${userCtx.id}`
+            }
+          >
+            {userCtx.demo ? "DEMO" : "LIVE"}
+          </span>
+          <code className="dev-panel__mode-id">{userCtx.id}</code>
+        </div>
         <div className="dev-panel__actions">
+          <button
+            type="button"
+            className="dev-panel__action"
+            onClick={clearDemo}
+            disabled={clearing}
+            title="Wipe every node and edge tagged demo:true from Neo4j"
+          >
+            {clearing ? "Clearing…" : "Clear demo data"}
+          </button>
           <button
             type="button"
             className="dev-panel__action"
             onClick={() => devBus.clear()}
             title="Clear the event ring"
           >
-            Clear
+            Clear log
           </button>
           <button
             type="button"
