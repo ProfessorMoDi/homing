@@ -3,7 +3,11 @@
 // Dev-mode is opt-in and persistent. Three ways to flip it on:
 //   1. Visit any page with ?dev=1 (writes localStorage flag, persists)
 //   2. The flag persists across reloads — no need to re-add the param
-//   3. Cmd+\ / Ctrl+\ toggles the panel open/closed once enabled
+//   3. Cmd+\ / Ctrl+\ — first press enables dev mode and opens the panel;
+//      subsequent presses toggle the panel open/closed
+//
+// To turn dev mode off entirely, click the × on the floating DEV badge or
+// visit any page with ?dev=0.
 //
 // Production users never see anything by default. The DevShell short-circuits
 // to a normal frame when isDevModeEnabled() returns false, and the heavy
@@ -48,6 +52,7 @@ interface DevModeCtx {
   open: boolean;
   toggle: () => void;
   setOpen: (open: boolean) => void;
+  enable: () => void;
   disable: () => void;
 }
 
@@ -85,6 +90,15 @@ export function DevModeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const enable = useCallback(() => {
+    try {
+      localStorage.setItem(ENABLED_KEY, "1");
+      localStorage.setItem(OPEN_KEY, "1");
+    } catch {}
+    setEnabled(true);
+    setOpenState(true);
+  }, []);
+
   const disable = useCallback(() => {
     try {
       localStorage.removeItem(ENABLED_KEY);
@@ -94,22 +108,27 @@ export function DevModeProvider({ children }: { children: React.ReactNode }) {
     setOpenState(false);
   }, []);
 
-  // Cmd+\ / Ctrl+\ toggles the panel when dev mode is enabled.
+  // Cmd+\ / Ctrl+\. First press enables dev mode + opens the panel;
+  // subsequent presses toggle the panel. Listener stays mounted regardless
+  // of state so the shortcut works as a global "open developer panel".
   useEffect(() => {
-    if (!enabled) return;
     function onKey(e: KeyboardEvent) {
       if (e.key !== KEYBOARD_KEY) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       e.preventDefault();
-      toggle();
+      if (!enabled) {
+        enable();
+      } else {
+        toggle();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, toggle]);
+  }, [enabled, toggle, enable]);
 
   const value = useMemo<DevModeCtx>(
-    () => ({ enabled, open, toggle, setOpen, disable }),
-    [enabled, open, toggle, setOpen, disable],
+    () => ({ enabled, open, toggle, setOpen, enable, disable }),
+    [enabled, open, toggle, setOpen, enable, disable],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -125,6 +144,7 @@ export function useDevMode(): DevModeCtx {
     open: false,
     toggle: () => {},
     setOpen: () => {},
+    enable: () => {},
     disable: () => {},
   };
 }
