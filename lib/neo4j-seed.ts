@@ -1,6 +1,8 @@
 import type { ManagedTransaction } from "neo4j-driver";
 import { withWrite, withSession } from "./neo4j";
 import { seedUsers, type SeedUser } from "./data";
+import { seedOntology } from "./neo4j-ontology";
+import { canonicalizeNeighbourhood, canonicalizeTopic } from "./taxonomy";
 import type { Activity } from "./types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -42,7 +44,12 @@ export async function runSchemaMigration(): Promise<void> {
 
 // ── Seed all 12 users + lookups ───────────────────────────────────────────────
 
-export async function seedDatabase(): Promise<{ users: number; topics: number }> {
+export async function seedDatabase(): Promise<{
+  users: number;
+  topics: number;
+  ontology_topics: number;
+  ontology_edges: number;
+}> {
   await withWrite(async (tx) => {
     for (const ts of TIME_SLOTS) {
       await tx.run(`MERGE (ts:TimeSlot {id: $id}) SET ts.label = $label`, ts);
@@ -55,6 +62,10 @@ export async function seedDatabase(): Promise<{ users: number; topics: number }>
     }
   });
 
+  // Write the canonical Topic catalogue + RELATED_TO edges before users so
+  // that user :LIKES edges land on already-titled, ontology-linked nodes.
+  const ontologyStats = await withWrite((tx) => seedOntology(tx));
+
   for (const user of seedUsers) {
     await withWrite((tx) => upsertUser(tx, user));
   }
@@ -62,7 +73,12 @@ export async function seedDatabase(): Promise<{ users: number; topics: number }>
   const r = await withSession((s) => s.run(`MATCH (t:Topic) RETURN count(t) AS c`));
   const topics = (r.records[0].get("c") as { toNumber(): number }).toNumber();
 
-  return { users: seedUsers.length, topics };
+  return {
+    users: seedUsers.length,
+    topics,
+    ontology_topics: ontologyStats.topics,
+    ontology_edges: ontologyStats.edges,
+  };
 }
 
 // ── User upsert ───────────────────────────────────────────────────────────────
@@ -77,6 +93,8 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
   const languages_spoken = user.languages_spoken ?? [];
   const languages_comfortable = user.languages_comfortable ?? [];
 
+  const neighbourhood = canonicalizeNeighbourhood(user.neighbourhood);
+
   await tx.run(
     `MERGE (u:User {id: $id})
      SET u.first_name          = $first_name,
@@ -89,7 +107,7 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
          u.verification_status = $verification_status,
          u.profile_completed   = $profile_completed,
          u.updated_at          = $updated_at`,
-    { ...user, updated_at: now },
+    { ...user, neighbourhood, updated_at: now },
   );
 
   // Replace LIKES / DISLIKES
@@ -98,14 +116,16 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
     { id: user.id },
   );
   for (const interest of interests) {
-    const topicId = slugify(interest);
+    const { id: topicId, title, canonical } = canonicalizeTopic(interest);
+    if (!topicId) continue;
     await tx.run(
       `MERGE (t:Topic {id: $topicId})
-         ON CREATE SET t.title = $title, t.tier = 'specific'
+         ON CREATE SET t.title = $title, t.tier = 'specific', t.canonical = $canonical
+         ON MATCH  SET t.title = coalesce(t.title, $title)
        WITH t
        MATCH (u:User {id: $userId})
        MERGE (u)-[:LIKES {weight: 1.0}]->(t)`,
-      { topicId, title: interest, userId: user.id },
+      { topicId, title, canonical, userId: user.id },
     );
   }
 
@@ -147,6 +167,7 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
 
 export async function upsertActivity(tx: ManagedTransaction, activity: Activity): Promise<void> {
   const now = new Date().toISOString();
+  const location_area = canonicalizeNeighbourhood(activity.location_area);
 
   await tx.run(
     `MERGE (a:Activity {id: $id})
@@ -158,6 +179,7 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
          a.time               = $time,
          a.duration           = $duration,
          a.location_area      = $location_area,
+         a.location_area_raw  = $location_area_raw,
          a.exact_venue        = $exact_venue,
          a.group_size_target  = $group_size_target,
          a.minimum_group_size = $minimum_group_size,
@@ -166,7 +188,13 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
          a.note               = $note,
          a.status             = $status,
          a.updated_at         = $updated_at`,
-    { ...activity, note: activity.note ?? "", updated_at: now },
+    {
+      ...activity,
+      location_area,
+      location_area_raw: activity.location_area,
+      note: activity.note ?? "",
+      updated_at: now,
+    },
   );
 
   await tx.run(
@@ -175,7 +203,9 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
     { aid: activity.id, uid: activity.creator_user_id },
   );
 
-  // Rebuild REQUIRES
+  // Rebuild REQUIRES. Tags pass through canonicalizeTopic so LLM-emitted
+  // singular/plural/alias variants collapse onto the same Topic id used by
+  // user :LIKES edges — without this the join in the match query misses.
   const specific_tags = activity.specific_interest_tags ?? [];
   const broader_tags = activity.broader_interest_tags ?? [];
   await tx.run(
@@ -183,21 +213,27 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
     { id: activity.id },
   );
   for (const tag of specific_tags) {
-    const topicId = slugify(tag);
+    const { id: topicId, title, canonical } = canonicalizeTopic(tag);
+    if (!topicId) continue;
     await tx.run(
-      `MERGE (t:Topic {id: $topicId}) ON CREATE SET t.title = $title, t.tier = 'specific'
+      `MERGE (t:Topic {id: $topicId})
+         ON CREATE SET t.title = $title, t.tier = 'specific', t.canonical = $canonical
+         ON MATCH  SET t.title = coalesce(t.title, $title)
        WITH t MATCH (a:Activity {id: $aid})
        MERGE (a)-[:REQUIRES {tier: 'specific'}]->(t)`,
-      { topicId, title: tag, aid: activity.id },
+      { topicId, title, canonical, aid: activity.id },
     );
   }
   for (const tag of broader_tags) {
-    const topicId = slugify(tag);
+    const { id: topicId, title, canonical } = canonicalizeTopic(tag);
+    if (!topicId) continue;
     await tx.run(
-      `MERGE (t:Topic {id: $topicId}) ON CREATE SET t.title = $title, t.tier = 'broader'
+      `MERGE (t:Topic {id: $topicId})
+         ON CREATE SET t.title = $title, t.tier = 'broader', t.canonical = $canonical
+         ON MATCH  SET t.title = coalesce(t.title, $title)
        WITH t MATCH (a:Activity {id: $aid})
        MERGE (a)-[:REQUIRES {tier: 'broader'}]->(t)`,
-      { topicId, title: tag, aid: activity.id },
+      { topicId, title, canonical, aid: activity.id },
     );
   }
 
@@ -216,15 +252,6 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-export function slugify(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-}
 
 function deriveTimeSlots(day: string, time: string): string[] {
   const d = day.toLowerCase();
