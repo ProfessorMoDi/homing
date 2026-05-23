@@ -67,10 +67,10 @@ export function scoreUserForActivity(
   } else if (
     day.includes("friday") &&
     user.availability.includes("friday-morning") &&
-    /(morning|afternoon|am|13|14|15)/.test(time)
+    /(morning|\bam\b|^0[0-9]:|^1[0-2]:)/.test(time)
   ) {
     score += 22;
-    reasons.push("Friday before 15:00 fits");
+    reasons.push("Friday morning fits");
   } else if (user.availability.includes("flexible")) {
     score += 10;
     reasons.push("Flexible availability");
@@ -90,15 +90,14 @@ export function scoreUserForActivity(
 
   // 4. Commitment appetite — softer factor
   if (
-    activity.activity_type === "one-off" &&
-    (user.commitment_appetite === "try-once" ||
-      user.commitment_appetite === "maybe-weekly")
+    user.commitment_appetite === "try-once" ||
+    user.commitment_appetite === "maybe-weekly"
   ) {
     score += 6;
   }
 
-  // 6. Light location proximity
-  if (user.neighbourhood === "Kralingen") score += 4;
+  // 5. Light location proximity
+  if (user.neighbourhood === activity.location_area) score += 4;
 
   return { user, score, reasons, excluded };
 }

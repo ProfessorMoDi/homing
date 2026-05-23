@@ -4,7 +4,7 @@
  * InteractiveGraph
  *
  * A presentation-grade illustration of HOMING's graph-database matching model.
- * Renders a hand-positioned graph of 25 nodes and 59 edges as inline SVG.
+ * Renders a hand-positioned graph of 25 nodes and 50 edges as inline SVG.
  *
  * What the audience can do:
  *   • Hover any node — highlights the node, its direct neighbours, and the
@@ -603,7 +603,7 @@ function InfoPanel({
     return (
       <div className="rounded-2xl border border-dashed border-[var(--color-line)] bg-transparent p-4 md:p-5 text-[12.5px] md:text-[14px] text-[var(--color-muted)] leading-relaxed">
         Hover or click a node to inspect its edges. The graph here has
-        25 nodes and 59 edges — pick any one to see who it knows.
+        25 nodes and 50 edges — pick any one to see who it knows.
       </div>
     );
   }

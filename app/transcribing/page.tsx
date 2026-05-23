@@ -158,6 +158,7 @@ function Transcribing() {
   const [paused, setPaused] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const startedRef = useRef(false);
+  const fakeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // Carousel auto-advance, pauses if user interacts or when stage is terminal.
   useEffect(() => {
@@ -221,12 +222,15 @@ function Transcribing() {
     if (state.topics.length === 0) loadSampleVoice();
     runFakeProgression();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { fakeTimersRef.current.forEach(clearTimeout); };
   }, []);
 
   function runFakeProgression() {
     setStage(1);
-    setTimeout(() => setStage(2), 1100);
-    setTimeout(() => setStage(3), 2300);
+    fakeTimersRef.current = [
+      setTimeout(() => setStage(2), 1100),
+      setTimeout(() => setStage(3), 2300),
+    ];
   }
 
   async function runRealPipeline(blob: Blob, demoMode: boolean) {

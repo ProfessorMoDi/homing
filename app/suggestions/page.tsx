@@ -137,7 +137,12 @@ export default function Suggestions() {
               >
                 Edit
               </button>
-              <button className="btn-ghost !text-[13.5px]">Not now</button>
+              <button
+                onClick={() => router.back()}
+                className="btn-ghost !text-[13.5px]"
+              >
+                Not now
+              </button>
             </div>
           </Card>
         ))}

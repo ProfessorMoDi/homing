@@ -122,7 +122,7 @@ export default function Themes() {
       }));
     if (visibleTopics.length === 0) return;
     clearCached(topicSignature(visibleTopics));
-    setRegen("idle");
+    setRegen("loading");
     setRetryTick((n) => n + 1);
   }, [state.topics]);
 

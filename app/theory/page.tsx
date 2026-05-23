@@ -1145,7 +1145,7 @@ function ComplianceSlide() {
             {
               ref: "Risk tier",
               point: "Limited-risk system",
-              body: "Used to assist matching, not to grade or rank humans. Final action is always the user&apos;s.",
+              body: "Used to assist matching, not to grade or rank humans. Final action is always the user's.",
             },
             {
               ref: "Art 50",

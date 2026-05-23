@@ -13,6 +13,16 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  if (
+    typeof feedback.people_feedback !== "object" ||
+    feedback.people_feedback === null ||
+    Array.isArray(feedback.people_feedback)
+  ) {
+    return NextResponse.json(
+      { error: "people_feedback must be an object" },
+      { status: 400 },
+    );
+  }
 
   const now = new Date().toISOString();
 

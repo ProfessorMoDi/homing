@@ -71,6 +71,11 @@ export async function seedDatabase(): Promise<{ users: number; topics: number }>
 
 export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promise<void> {
   const now = new Date().toISOString();
+  // Defensive defaults so API callers with partial payloads don't crash loops
+  const interests = user.interests ?? [];
+  const availability = (user.availability ?? []) as string[];
+  const languages_spoken = user.languages_spoken ?? [];
+  const languages_comfortable = user.languages_comfortable ?? [];
 
   await tx.run(
     `MERGE (u:User {id: $id})
@@ -92,7 +97,7 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
     `MATCH (u:User {id: $id})-[r:LIKES|DISLIKES]->(:Topic) DELETE r`,
     { id: user.id },
   );
-  for (const interest of user.interests) {
+  for (const interest of interests) {
     const topicId = slugify(interest);
     await tx.run(
       `MERGE (t:Topic {id: $topicId})
@@ -109,7 +114,7 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
     `MATCH (u:User {id: $id})-[r:AVAILABLE_AT]->(:TimeSlot) DELETE r`,
     { id: user.id },
   );
-  for (const slot of user.availability) {
+  for (const slot of availability) {
     await tx.run(
       `MATCH (u:User {id: $uid}), (ts:TimeSlot {id: $tsId})
        MERGE (u)-[:AVAILABLE_AT]->(ts)`,
@@ -122,14 +127,14 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
     `MATCH (u:User {id: $id})-[r:SPEAKS|COMFORTABLE_IN]->(:Language) DELETE r`,
     { id: user.id },
   );
-  for (const lang of user.languages_spoken) {
+  for (const lang of languages_spoken) {
     await tx.run(
       `MATCH (u:User {id: $uid}), (l:Language {id: $lid})
        MERGE (u)-[:SPEAKS]->(l)`,
       { uid: user.id, lid: lang.toLowerCase() },
     );
   }
-  for (const lang of user.languages_comfortable) {
+  for (const lang of languages_comfortable) {
     await tx.run(
       `MATCH (u:User {id: $uid}), (l:Language {id: $lid})
        MERGE (u)-[:COMFORTABLE_IN]->(l)`,
@@ -171,11 +176,13 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
   );
 
   // Rebuild REQUIRES
+  const specific_tags = activity.specific_interest_tags ?? [];
+  const broader_tags = activity.broader_interest_tags ?? [];
   await tx.run(
     `MATCH (a:Activity {id: $id})-[r:REQUIRES]->(:Topic) DELETE r`,
     { id: activity.id },
   );
-  for (const tag of activity.specific_interest_tags) {
+  for (const tag of specific_tags) {
     const topicId = slugify(tag);
     await tx.run(
       `MERGE (t:Topic {id: $topicId}) ON CREATE SET t.title = $title, t.tier = 'specific'
@@ -184,7 +191,7 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
       { topicId, title: tag, aid: activity.id },
     );
   }
-  for (const tag of activity.broader_interest_tags) {
+  for (const tag of broader_tags) {
     const topicId = slugify(tag);
     await tx.run(
       `MERGE (t:Topic {id: $topicId}) ON CREATE SET t.title = $title, t.tier = 'broader'
@@ -211,7 +218,12 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function slugify(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
 }
 
 function deriveTimeSlots(day: string, time: string): string[] {
@@ -220,11 +232,13 @@ function deriveTimeSlots(day: string, time: string): string[] {
   const slots: string[] = [];
 
   if (d.includes("thursday")) slots.push("thursday-evening");
-  if (d.includes("friday") && /morning|am|^0[0-9]:|^1[0-3]:/.test(t))
+  // friday-morning: only if time is before 13:00 (morning slot)
+  if (d.includes("friday") && /morning|\bam\b|^0[0-9]:|^1[0-2]:/.test(t))
     slots.push("friday-morning");
   if (d.includes("saturday") || d.includes("sunday"))
     slots.push("every-weekend");
-  if (/monday|tuesday|wednesday|thursday/.test(d))
+  // Thursday is already its own slot — don't double-tag as weekday-evenings
+  if (/monday|tuesday|wednesday/.test(d))
     slots.push("weekday-evenings");
 
   return slots.length > 0 ? slots : ["flexible"];
