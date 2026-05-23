@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { Activity, Topic } from "./types";
@@ -21,6 +22,7 @@ import {
   sampleVoiceTranscript,
 } from "./data";
 import { extractFromTranscript } from "./voiceTopics";
+import { persistAndMatch } from "./neo4jClient";
 
 interface Signup {
   first_name: string;
@@ -175,6 +177,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, 250);
     return () => clearTimeout(handle);
   }, [state, hydrated]);
+
+  // Mirror every newly-generated activity into Neo4j. We track which ids have
+  // already been synced so a state rehydration or a re-render doesn't re-fire
+  // the calls. Fail-soft — the live UX never depends on Neo4j being reachable;
+  // the dev panel surfaces any failures.
+  const syncedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!hydrated) return;
+    for (const a of state.suggestedActivities) {
+      if (!a?.id || syncedRef.current.has(a.id)) continue;
+      syncedRef.current.add(a.id);
+      persistAndMatch(a);
+    }
+  }, [hydrated, state.suggestedActivities]);
 
   const setSignup = useCallback((patch: Partial<Signup>) => {
     setState((s) => ({ ...s, signup: { ...s.signup, ...patch } }));
