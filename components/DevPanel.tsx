@@ -5,20 +5,30 @@ import { devBus, useDevEvents, type DevEvent } from "../lib/devBus";
 import { useDevMode } from "../lib/devMode";
 import { Timeline } from "./devpanel/Timeline";
 import { CallDetail } from "./devpanel/CallDetail";
+import { PipelineNarrative } from "./devpanel/PipelineNarrative";
+import { stageForUrl, type StageId } from "./devpanel/pipeline";
 
-// Top-level developer panel. Two columns: a timeline of recent API calls on
-// the left, the detail view for the selected call on the right.
+// Top-level developer panel.
 //
-// Auto-selects the most recent event when the user hasn't picked one. This
-// keeps the panel useful during a live demo — by default it follows the
-// action; clicking a row pins it.
+//   ┌──────────────────────────────────────────────────────────────┐
+//   │  Pipeline narrative (clickable stages + step explanations)   │
+//   ├────────────────────────────┬─────────────────────────────────┤
+//   │  Timeline (per stage)      │  Detail (story + visualisation) │
+//   └────────────────────────────┴─────────────────────────────────┘
+//
+// The narrative is the spine. Clicking a stage filters the timeline; the
+// detail view explains the call in pipeline terms then renders the
+// specialised visualisations (graph / breakdown / canonicalisation trace).
+// Auto-follow: if the user hasn't pinned anything, the panel tracks the
+// latest event so the demo "drives itself".
 
 export function DevPanel() {
   const events = useDevEvents();
   const { toggle } = useDevMode();
   const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const [focusedStage, setFocusedStage] = useState<StageId | "auto">("auto");
 
-  // If the pinned event scrolls out of the ring buffer, drop the pin.
+  // Drop a stale pin if its event scrolled out of the ring.
   useEffect(() => {
     if (pinnedId && !events.some((e) => e.id === pinnedId)) {
       setPinnedId(null);
@@ -26,11 +36,17 @@ export function DevPanel() {
   }, [events, pinnedId]);
 
   const selected: DevEvent | null = useMemo(() => {
-    if (pinnedId) {
-      return events.find((e) => e.id === pinnedId) ?? null;
+    if (pinnedId) return events.find((e) => e.id === pinnedId) ?? null;
+    if (focusedStage !== "auto") {
+      return events.find((e) => stageForUrl(e.url) === focusedStage) ?? null;
     }
     return events[0] ?? null;
-  }, [events, pinnedId]);
+  }, [events, pinnedId, focusedStage]);
+
+  const filteredEvents = useMemo(() => {
+    if (focusedStage === "auto") return events;
+    return events.filter((e) => stageForUrl(e.url) === focusedStage);
+  }, [events, focusedStage]);
 
   return (
     <div className="dev-panel">
@@ -62,9 +78,16 @@ export function DevPanel() {
         </div>
       </header>
 
+      <PipelineNarrative
+        events={events}
+        focusedStage={focusedStage}
+        onFocusStage={setFocusedStage}
+        selectedUrl={selected?.url ?? null}
+      />
+
       <div className="dev-panel__body">
         <Timeline
-          events={events}
+          events={filteredEvents}
           selectedId={selected?.id ?? null}
           pinnedId={pinnedId}
           onSelect={(id) => setPinnedId((prev) => (prev === id ? null : id))}
@@ -86,31 +109,10 @@ function EmptyState() {
     <div className="dev-panel__empty">
       <h3>Waiting for traffic</h3>
       <p>
-        Use the mobile app on the left. Every <code>/api/*</code> call will
-        appear here with its full request, response, and timing.
+        Use the mobile app on the left. As each pipeline stage fires, the
+        narrative above lights up and the timeline fills with the underlying
+        calls. Click any stage to filter; click any row to pin its detail.
       </p>
-      <ul>
-        <li>
-          <span className="dev-pill dev-pill--sky">/api/transcribe</span> —
-          voice → text
-        </li>
-        <li>
-          <span className="dev-pill dev-pill--clay">/api/analyze</span> — text
-          → topics + activities
-        </li>
-        <li>
-          <span className="dev-pill dev-pill--sage">/api/neo4j/activity</span>{" "}
-          — persist activity + canonicalisation deltas
-        </li>
-        <li>
-          <span className="dev-pill dev-pill--sage">/api/neo4j/match</span> —
-          weighted graph-based matching
-        </li>
-        <li>
-          <span className="dev-pill dev-pill--sage">/api/neo4j/graph</span> —
-          subgraph for visualisation
-        </li>
-      </ul>
     </div>
   );
 }

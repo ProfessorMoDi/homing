@@ -6,6 +6,7 @@ import { JsonView } from "./JsonView";
 import { Neo4jGraphView } from "./Neo4jGraphView";
 import { MatchBreakdown } from "./MatchBreakdown";
 import { CanonicalisationTrace } from "./CanonicalisationTrace";
+import { stageById, stageForUrl } from "./pipeline";
 
 // Routes a selected event to the right detail view based on the URL
 // pattern. Every event always gets the JSON Request / Response viewers; the
@@ -98,8 +99,24 @@ function TabButton({
 }
 
 function SummaryView({ event }: { event: DevEvent }) {
+  const stage = stageById(stageForUrl(event.url));
   return (
     <div className="dev-detail__body dev-detail__body--summary">
+      {/* Pipeline context first — orients the viewer before showing data */}
+      <Section label={`Step · ${stage.name}`}>
+        <p className="dev-detail__what">{stage.what}</p>
+        {stage.steps.length > 0 ? (
+          <ol className="dev-detail__steps">
+            {stage.steps.map((s, i) => (
+              <li key={i}>
+                <span className="dev-detail__step-num">{i + 1}</span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </Section>
+
       {/* Endpoint-specific visualisations */}
       {event.url.startsWith("/api/neo4j/match") ? (
         <MatchBreakdown event={event} />
@@ -111,14 +128,10 @@ function SummaryView({ event }: { event: DevEvent }) {
         <Neo4jGraphView event={event} />
       ) : null}
 
-      {/* Generic everywhere */}
       <Section label="Endpoint">
         <div className="dev-detail__endpoint">
           <code>{event.method}</code> <code>{event.url}</code>
         </div>
-        <p className="dev-detail__endpoint-hint">
-          {endpointHint(event.url)}
-        </p>
       </Section>
 
       {event.error ? (
@@ -184,36 +197,3 @@ function Section({
   );
 }
 
-function endpointHint(url: string): string {
-  if (url.startsWith("/api/transcribe")) {
-    return "ElevenLabs Scribe v1. Posts the recorded audio blob; returns the transcript text.";
-  }
-  if (url.startsWith("/api/analyze")) {
-    return "Ollama gpt-oss:120b. Takes a transcript, returns structured topics + activity suggestions.";
-  }
-  if (url.startsWith("/api/suggest")) {
-    return "Ollama gpt-oss:120b. Given a topic set, generates 3 activity suggestions grounded in those topics.";
-  }
-  if (url.startsWith("/api/neo4j/activity")) {
-    return "Upserts the Activity node in Neo4j and rebuilds its REQUIRES + SCHEDULED_AT edges using canonical Topic ids.";
-  }
-  if (url.startsWith("/api/neo4j/match")) {
-    return "Runs the weighted match Cypher: REQUIRES topics expanded by 1-hop RELATED_TO, scored against user LIKES + availability + language + commitment + location + preference history.";
-  }
-  if (url.startsWith("/api/neo4j/graph")) {
-    return "Returns the subgraph relevant to one activity: REQUIRES topics, their RELATED_TO neighbours, and the users who LIKE any of them.";
-  }
-  if (url.startsWith("/api/neo4j/ontology")) {
-    return "Reflects the canonical topic catalogue + RELATED_TO edges currently live in Neo4j.";
-  }
-  if (url.startsWith("/api/neo4j/seed")) {
-    return "One-shot seed: writes time slots, languages, the canonical topic catalogue + ontology edges, then all seed users.";
-  }
-  if (url.startsWith("/api/neo4j/user")) {
-    return "Upserts a User node and rebuilds its LIKES + AVAILABLE_AT + SPEAKS + COMFORTABLE_IN edges.";
-  }
-  if (url.startsWith("/api/neo4j/feedback")) {
-    return "Records post-activity feedback as PREFERS_PERSON / AVOID edges between users.";
-  }
-  return "Internal API call.";
-}

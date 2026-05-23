@@ -1,22 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InteractiveNvlWrapper } from "@neo4j-nvl/react";
+import type { Node as NvlNode, Relationship as NvlRel } from "@neo4j-nvl/base";
 import type { DevEvent } from "../../lib/devBus";
 
-// Hand-rolled SVG render of an activity-scoped subgraph. Deterministic
-// radial layout (no force simulation): activity in centre, required topics
-// on the inner ring, RELATED_TO neighbours on a mid ring, users on the
-// outer ring. Edges colour-coded by relationship type; hover surfaces
-// metadata.
+// Interactive graph view powered by Neo4j's Visualization Library (NVL).
+// Force-directed layout, pan/zoom/drag built in. Clicking a topic or user
+// node fires /api/neo4j/expand to pull the next 1-hop layer and merges it
+// into the live graph — the user can trace the matching logic node by node.
 
-interface Node {
+interface PayloadNode {
   id: string;
   label: string;
   kind: "activity" | "topic-required" | "topic-related" | "user" | "creator";
   meta?: Record<string, unknown>;
 }
 
-interface Edge {
+interface PayloadEdge {
   from: string;
   to: string;
   kind: "REQUIRES" | "RELATED_TO" | "LIKES";
@@ -28,23 +29,151 @@ interface Edge {
 interface GraphPayload {
   activity_id?: string;
   creator_user_id?: string;
-  nodes?: Node[];
-  edges?: Edge[];
+  nodes?: PayloadNode[];
+  edges?: PayloadEdge[];
   counts?: Record<string, number>;
 }
 
-const W = 560;
-const H = 460;
-const CX = W / 2;
-const CY = H / 2;
-const RING = { required: 100, related: 175, user: 220 };
+// Palette tied to the design tokens (--color-*). NVL needs concrete hex.
+const COLOR = {
+  ink: "#1b1d1c",
+  sage: "#4f7942",
+  sageSoft: "#e0e9d6",
+  clay: "#c97e63",
+  sky: "#8fb3c9",
+  paper: "#ffffff",
+  line: "#e2dfd4",
+  muted: "#8a8a85",
+} as const;
+
+const SIZE_BY_KIND: Record<PayloadNode["kind"], number> = {
+  activity: 60,
+  "topic-required": 42,
+  "topic-related": 30,
+  creator: 38,
+  user: 32,
+};
+
+const COLOR_BY_KIND: Record<PayloadNode["kind"], string> = {
+  activity: COLOR.ink,
+  "topic-required": COLOR.sage,
+  "topic-related": COLOR.sageSoft,
+  creator: COLOR.clay,
+  user: COLOR.sky,
+};
+
+const REL_STYLE: Record<PayloadEdge["kind"], { color: string; width: number }> = {
+  REQUIRES:    { color: COLOR.ink,  width: 3 },
+  RELATED_TO:  { color: COLOR.sage, width: 2 },
+  LIKES:       { color: COLOR.sky,  width: 1.5 },
+};
 
 export function Neo4jGraphView({ event }: { event: DevEvent }) {
-  const data = (event.responseBody as GraphPayload | null) ?? null;
-  const [hover, setHover] = useState<string | null>(null);
+  const initial = (event.responseBody as GraphPayload | null) ?? null;
+  // Local accumulator: starts with the subgraph the server returned, grows
+  // as the user expands nodes. Re-seeds whenever the source event changes.
+  const [nodes, setNodes] = useState<PayloadNode[]>(initial?.nodes ?? []);
+  const [edges, setEdges] = useState<PayloadEdge[]>(initial?.edges ?? []);
+  const [hover, setHover] = useState<PayloadNode | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const expandedRef = useRef<Set<string>>(new Set());
+  const nvlRef = useRef<unknown>(null);
 
-  const layout = useMemo(() => computeLayout(data?.nodes ?? []), [data?.nodes]);
-  if (!data || !data.nodes || data.nodes.length === 0) {
+  useEffect(() => {
+    setNodes(initial?.nodes ?? []);
+    setEdges(initial?.edges ?? []);
+    expandedRef.current.clear();
+    setHover(null);
+  }, [event.id, initial?.nodes, initial?.edges]);
+
+  // Map payload → NVL shapes. Memo on identity so NVL doesn't re-layout on
+  // every render.
+  const nvlNodes: NvlNode[] = useMemo(
+    () =>
+      nodes.map((n) => ({
+        id: n.id,
+        caption: n.label,
+        color: COLOR_BY_KIND[n.kind],
+        size: SIZE_BY_KIND[n.kind],
+        captionAlign: "bottom" as const,
+        captionSize: 1.1,
+      })),
+    [nodes],
+  );
+
+  const nvlRels: NvlRel[] = useMemo(
+    () =>
+      edges.map((e, i) => {
+        const style = REL_STYLE[e.kind];
+        return {
+          id: `${e.from}__${e.to}__${e.kind}__${i}`,
+          from: e.from,
+          to: e.to,
+          type: e.kind,
+          caption:
+            e.kind === "RELATED_TO" && e.weight != null
+              ? e.weight.toFixed(1)
+              : undefined,
+          color: style.color,
+          width: style.width,
+          captionSize: 0.9,
+        };
+      }),
+    [edges],
+  );
+
+  const expand = useCallback(
+    async (node: PayloadNode) => {
+      if (node.kind === "activity") return;
+      if (expandedRef.current.has(node.id)) return;
+      expandedRef.current.add(node.id);
+      setBusy(node.id);
+      try {
+        const r = await fetch("/api/neo4j/expand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nodeId: node.id, kind: node.kind }),
+        });
+        if (!r.ok) return;
+        const data = (await r.json()) as {
+          nodes?: PayloadNode[];
+          edges?: PayloadEdge[];
+        };
+        if (!data.nodes && !data.edges) return;
+        setNodes((prev) => mergeNodes(prev, data.nodes ?? []));
+        setEdges((prev) => mergeEdges(prev, data.edges ?? []));
+      } catch {
+        // fail-soft: dev panel will show the failed expand in the timeline
+      } finally {
+        setBusy(null);
+      }
+    },
+    [],
+  );
+
+  const mouseEventCallbacks = useMemo(
+    () => ({
+      onHover: (element: { id: string } | null) => {
+        if (!element) {
+          setHover(null);
+          return;
+        }
+        const found = nodes.find((n) => n.id === element.id);
+        if (found) setHover(found);
+      },
+      onNodeClick: (node: { id: string }) => {
+        const found = nodes.find((n) => n.id === node.id);
+        if (found) expand(found);
+      },
+      // Allow built-in interaction: pan, zoom, drag.
+      onPan: true as unknown as undefined,
+      onZoom: true as unknown as undefined,
+      onDrag: true as unknown as undefined,
+    }),
+    [nodes, expand],
+  );
+
+  if (!initial || (initial.nodes ?? []).length === 0) {
     return (
       <div className="dev-graph dev-graph--empty">
         {event.state === "pending"
@@ -54,112 +183,79 @@ export function Neo4jGraphView({ event }: { event: DevEvent }) {
     );
   }
 
-  const positions = layout.positions;
-  const edges = data.edges ?? [];
-
   return (
     <div className="dev-graph">
       <div className="dev-graph__meta">
         <strong>Activity subgraph</strong>
         <span className="dev-graph__counts">
-          {data.counts?.nodes ?? data.nodes.length} nodes ·{" "}
-          {data.counts?.edges ?? edges.length} edges
+          {nodes.length} nodes · {edges.length} edges
+          {expandedRef.current.size > 0
+            ? ` · ${expandedRef.current.size} expanded`
+            : ""}
         </span>
       </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="dev-graph__svg"
-        role="img"
-        aria-label="Neo4j subgraph"
-      >
-        {/* Ring guides */}
-        <circle cx={CX} cy={CY} r={RING.required} className="dev-graph__ring" />
-        <circle cx={CX} cy={CY} r={RING.related} className="dev-graph__ring" />
-        <circle cx={CX} cy={CY} r={RING.user} className="dev-graph__ring" />
 
-        {/* Edges first so nodes sit on top */}
-        <g>
-          {edges.map((e, i) => {
-            const a = positions.get(e.from);
-            const b = positions.get(e.to);
-            if (!a || !b) return null;
-            const highlighted =
-              hover != null && (hover === e.from || hover === e.to);
-            const colorClass = `dev-graph__edge--${edgeColorClass(e.kind)}`;
-            const opacity = highlighted ? 1 : hover ? 0.15 : 0.6;
-            return (
-              <g key={i}>
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  className={`dev-graph__edge ${colorClass}`}
-                  strokeOpacity={opacity}
-                />
-                {e.kind === "RELATED_TO" && e.weight != null ? (
-                  <text
-                    x={(a.x + b.x) / 2}
-                    y={(a.y + b.y) / 2 - 4}
-                    className="dev-graph__edge-label"
-                    opacity={hover && !highlighted ? 0 : 0.7}
-                  >
-                    {e.weight.toFixed(1)}
-                  </text>
-                ) : null}
-              </g>
-            );
-          })}
-        </g>
+      <div className="dev-graph__hint">
+        Drag to reposition · scroll to zoom · click a topic or user to expand its
+        connections
+      </div>
 
-        {/* Nodes */}
-        <g>
-          {data.nodes.map((n) => {
-            const p = positions.get(n.id);
-            if (!p) return null;
-            const isHover = hover === n.id;
-            const r = nodeRadius(n.kind);
-            return (
-              <g
-                key={n.id}
-                transform={`translate(${p.x}, ${p.y})`}
-                onMouseEnter={() => setHover(n.id)}
-                onMouseLeave={() => setHover(null)}
-                className="dev-graph__node-g"
-              >
-                <circle
-                  r={r}
-                  className={`dev-graph__node dev-graph__node--${kindClass(n.kind)}`}
-                  style={{
-                    transform: isHover ? "scale(1.18)" : "scale(1)",
-                    transformOrigin: "center",
-                  }}
-                />
-                <text
-                  y={r + 12}
-                  textAnchor="middle"
-                  className="dev-graph__node-label"
-                >
-                  {truncate(n.label, 18)}
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      </svg>
+      <div className="dev-graph__nvl">
+        <InteractiveNvlWrapper
+          // @ts-expect-error — ref typing of NVL is overly strict
+          ref={nvlRef}
+          nodes={nvlNodes}
+          rels={nvlRels}
+          layout="forceDirected"
+          nvlOptions={{
+            initialZoom: 0.75,
+            allowDynamicMinZoom: true,
+            instanceId: `nvl-${event.id}`,
+            relationshipThreshold: 0,
+          }}
+          mouseEventCallbacks={mouseEventCallbacks}
+          style={{ width: "100%", height: 360, background: COLOR.paper }}
+        />
+        {busy ? (
+          <div className="dev-graph__busy">Expanding {busy}…</div>
+        ) : null}
+      </div>
 
       <Legend />
-      {hover ? <HoverDetail node={data.nodes.find((n) => n.id === hover) ?? null} /> : null}
+      {hover ? <HoverDetail node={hover} /> : null}
     </div>
   );
 }
 
-function HoverDetail({ node }: { node: Node | null }) {
-  if (!node) return null;
+// ── Helpers ────────────────────────────────────────────────────────────────
+function mergeNodes(prev: PayloadNode[], next: PayloadNode[]): PayloadNode[] {
+  const seen = new Set(prev.map((n) => n.id));
+  const merged = [...prev];
+  for (const n of next) {
+    if (seen.has(n.id)) continue;
+    seen.add(n.id);
+    merged.push(n);
+  }
+  return merged;
+}
+
+function mergeEdges(prev: PayloadEdge[], next: PayloadEdge[]): PayloadEdge[] {
+  const key = (e: PayloadEdge) => `${e.from}|${e.to}|${e.kind}`;
+  const seen = new Set(prev.map(key));
+  const merged = [...prev];
+  for (const e of next) {
+    if (seen.has(key(e))) continue;
+    seen.add(key(e));
+    merged.push(e);
+  }
+  return merged;
+}
+
+function HoverDetail({ node }: { node: PayloadNode }) {
   return (
     <div className="dev-graph__hover">
       <div className="dev-graph__hover-title">
-        <span className={`dev-graph__hover-dot dev-graph__hover-dot--${kindClass(node.kind)}`} />
+        <span className={`dev-graph__hover-dot dev-graph__hover-dot--${node.kind}`} />
         <strong>{node.label}</strong>
         <code>{node.id}</code>
       </div>
@@ -184,8 +280,8 @@ function Legend() {
       <Item kind="activity" label="Activity" />
       <Item kind="topic-required" label="Required topic" />
       <Item kind="topic-related" label="Related topic" />
-      <Item kind="user" label="User · :LIKES" />
       <Item kind="creator" label="Creator" />
+      <Item kind="user" label="User" />
       <div className="dev-graph__legend-divider" />
       <EdgeItem cls="requires" label="REQUIRES" />
       <EdgeItem cls="related" label="RELATED_TO" />
@@ -194,10 +290,10 @@ function Legend() {
   );
 }
 
-function Item({ kind, label }: { kind: Node["kind"]; label: string }) {
+function Item({ kind, label }: { kind: PayloadNode["kind"]; label: string }) {
   return (
     <div className="dev-graph__legend-item">
-      <span className={`dev-graph__legend-dot dev-graph__legend-dot--${kindClass(kind)}`} />
+      <span className={`dev-graph__legend-dot dev-graph__legend-dot--${kind}`} />
       <span>{label}</span>
     </div>
   );
@@ -210,74 +306,4 @@ function EdgeItem({ cls, label }: { cls: string; label: string }) {
       <span>{label}</span>
     </div>
   );
-}
-
-// ── Layout ──────────────────────────────────────────────────────────────────
-function computeLayout(nodes: Node[]): {
-  positions: Map<string, { x: number; y: number }>;
-} {
-  const positions = new Map<string, { x: number; y: number }>();
-  const activity = nodes.find((n) => n.kind === "activity");
-  if (activity) positions.set(activity.id, { x: CX, y: CY });
-
-  const required = nodes.filter((n) => n.kind === "topic-required");
-  required.forEach((n, i) => {
-    const angle = (i / Math.max(1, required.length)) * Math.PI * 2 - Math.PI / 2;
-    positions.set(n.id, {
-      x: CX + Math.cos(angle) * RING.required,
-      y: CY + Math.sin(angle) * RING.required,
-    });
-  });
-
-  const related = nodes.filter((n) => n.kind === "topic-related");
-  related.forEach((n, i) => {
-    const angle = (i / Math.max(1, related.length)) * Math.PI * 2 - Math.PI / 2 + Math.PI / Math.max(8, related.length * 2);
-    positions.set(n.id, {
-      x: CX + Math.cos(angle) * RING.related,
-      y: CY + Math.sin(angle) * RING.related,
-    });
-  });
-
-  const users = nodes.filter((n) => n.kind === "user" || n.kind === "creator");
-  users.forEach((n, i) => {
-    const angle = (i / Math.max(1, users.length)) * Math.PI * 2 - Math.PI / 2;
-    positions.set(n.id, {
-      x: CX + Math.cos(angle) * RING.user,
-      y: CY + Math.sin(angle) * RING.user,
-    });
-  });
-
-  return { positions };
-}
-
-function nodeRadius(kind: Node["kind"]): number {
-  switch (kind) {
-    case "activity": return 26;
-    case "topic-required": return 16;
-    case "topic-related": return 11;
-    case "creator": return 14;
-    case "user": return 12;
-  }
-}
-
-function kindClass(kind: Node["kind"]): string {
-  switch (kind) {
-    case "activity": return "activity";
-    case "topic-required": return "topic-required";
-    case "topic-related": return "topic-related";
-    case "creator": return "creator";
-    case "user": return "user";
-  }
-}
-
-function edgeColorClass(kind: Edge["kind"]): string {
-  switch (kind) {
-    case "REQUIRES": return "requires";
-    case "RELATED_TO": return "related";
-    case "LIKES": return "likes";
-  }
-}
-
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
