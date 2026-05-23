@@ -158,11 +158,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
   const [hydrated, setHydrated] = useState(false);
 
+  // Tracks which activity ids have already been mirrored into Neo4j so we
+  // don't re-fire calls on a state rehydration or a re-render. Pre-populated
+  // during rehydration with any activities loaded from localStorage so a
+  // page reload doesn't trigger a wave of API calls on the start page.
+  const syncedRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        setState({ ...initialState, ...JSON.parse(raw) });
+        const parsed = JSON.parse(raw) as Partial<State>;
+        setState({ ...initialState, ...parsed });
+        for (const a of parsed.suggestedActivities ?? []) {
+          if (a?.id) syncedRef.current.add(a.id);
+        }
       }
     } catch {}
     setHydrated(true);
@@ -178,11 +188,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(handle);
   }, [state, hydrated]);
 
-  // Mirror every newly-generated activity into Neo4j. We track which ids have
-  // already been synced so a state rehydration or a re-render doesn't re-fire
-  // the calls. Fail-soft — the live UX never depends on Neo4j being reachable;
-  // the dev panel surfaces any failures.
-  const syncedRef = useRef<Set<string>>(new Set());
+  // Mirror every newly-generated activity into Neo4j. Fail-soft — the live
+  // UX never depends on Neo4j being reachable; the dev panel surfaces any
+  // failures.
   useEffect(() => {
     if (!hydrated) return;
     for (const a of state.suggestedActivities) {
