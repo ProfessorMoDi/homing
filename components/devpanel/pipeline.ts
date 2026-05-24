@@ -6,11 +6,18 @@
 import type { DevEvent } from "../../lib/devBus";
 
 export type StageId =
+  | "signup"
   | "transcribe"
   | "analyse"
+  | "interests"
+  | "voice"
   | "suggest"
   | "persist"
   | "match"
+  | "invites"
+  | "verify"
+  | "feedback"
+  | "group"
   | "visualise"
   | "graph-write"
   | "other";
@@ -25,6 +32,18 @@ export interface Stage {
 
 export const STAGES: Stage[] = [
   {
+    id: "signup",
+    name: "Signup",
+    short: "Identity → User node",
+    what: "As you fill in signup fields, a User node is upserted in Neo4j. Patch-style: only the fields you've typed land in the graph, debounced 600ms so the User node trails your input.",
+    steps: [
+      "Each setSignup() call queues a sync; the store debounces 600ms after you stop typing.",
+      "POST /api/neo4j/user with the diff. Server runs canonicalizeNeighbourhood on the postcode → neighbourhood mapping.",
+      "Replaces AVAILABLE_AT / SPEAKS / COMFORTABLE_IN edges when those arrays are provided.",
+      "Demo flag is sticky — once written as demo:true it stays true.",
+    ],
+  },
+  {
     id: "transcribe",
     name: "Transcribe",
     short: "Voice → text",
@@ -33,6 +52,29 @@ export const STAGES: Stage[] = [
       "Browser packages the audio blob as multipart/form-data.",
       "POST /api/transcribe forwards it to ElevenLabs with our API key.",
       "Server returns { text, language } — text only, no diarisation.",
+    ],
+  },
+  {
+    id: "voice",
+    name: "Voice Profile",
+    short: "Transcript → VoiceProfile node",
+    what: "The transcript itself is persisted as a VoiceProfile node attached to the User via :RECORDED. 1:1 — re-recording replaces the prior profile rather than accumulating.",
+    steps: [
+      "POST /api/neo4j/voice with { user_id, transcript, source: live|sample, language }.",
+      "Server deletes the prior VoiceProfile (if any) and creates a fresh one.",
+      "The RECORDED edge timestamp records when this voice landed.",
+    ],
+  },
+  {
+    id: "interests",
+    name: "Interests",
+    short: "Topics → User LIKES edges",
+    what: "The 3–8 main topics the analysis extracted become LIKES edges from the User to the canonical Topic nodes. Edits in /themes flow through the same endpoint; hiding sets weight=0; removing deletes the edge.",
+    steps: [
+      "POST /api/neo4j/interests with the full topic set (server bulk-replaces).",
+      "Server canonicalizeTopic on every title — 'board game' collapses to 'board-games'.",
+      "Each LIKES edge gets a source property (voice-analysis / edited / signup) so we can tell where it came from.",
+      "Topics already in the ontology auto-inherit RELATED_TO edges; new ones land as canonical:false until added to the taxonomy.",
     ],
   },
   {
@@ -87,13 +129,59 @@ export const STAGES: Stage[] = [
     ],
   },
   {
+    id: "invites",
+    name: "Invites",
+    short: "Activity → INVITED → User",
+    what: "When you tap 'Ask' on an activity, the top candidates from the match get INVITED edges with status='pending'. Demo accepts simulate the next state transition; each accept/decline patches the edge in place.",
+    steps: [
+      "POST /api/neo4j/invites with { activity_id, invited_user_ids[] } to bulk-create the pending edges.",
+      "PATCH /api/neo4j/invites for each individual response — status flips to accepted/declined/rescheduled with responded_at.",
+      "AuraDB Free pool is small, so we serialise the patches rather than firing in parallel.",
+    ],
+  },
+  {
+    id: "verify",
+    name: "Verify",
+    short: "User → VERIFIED_VIA → Activity",
+    what: "Identity verification flips User.verification_status to 'verified' and creates a VERIFIED_VIA edge to the activity that gated the verification. We track method (iDIN / id-selfie / simulated) so the dev panel can show which path was taken.",
+    steps: [
+      "POST /api/neo4j/verify with { user_id, activity_id, method }.",
+      "Server sets User.verification_status and User.verified_at.",
+      "Creates the VERIFIED_VIA edge with the method and timestamp.",
+    ],
+  },
+  {
+    id: "feedback",
+    name: "Feedback",
+    short: "Rating + verdicts → RATED / PREFERS_PERSON / AVOID",
+    what: "Post-activity feedback writes three kinds of edge: a RATED edge from User to Activity carrying the 1–5 rating and the event note, plus per-person PREFERS_PERSON (accumulating strength) and AVOID edges between users.",
+    steps: [
+      "POST /api/neo4j/feedback once, with activity_rating + event_note + people_feedback map.",
+      "Server creates/updates the RATED edge with the rating and note.",
+      "Per-person: 'again' increments PREFERS_PERSON strength (capped 1.0); 'avoid' creates AVOID and removes any prior PREFERS_PERSON.",
+      "These edges drive future match scoring — preferred people get +10, avoid pairs are excluded entirely.",
+    ],
+  },
+  {
+    id: "group",
+    name: "Group",
+    short: "Activity → RecurringGroup → Members",
+    what: "When you choose 'same people, same activity' after a good outcome, a RecurringGroup node is created. It carries BORN_FROM to the original activity and MEMBER_OF edges from every accepted invitee plus the creator.",
+    steps: [
+      "POST /api/neo4j/group with { group_id, born_from_activity_id, member_user_ids[] }.",
+      "Server MERGEs the RecurringGroup and writes BORN_FROM + MEMBER_OF in one transaction.",
+      "DELETE /api/neo4j/group removes a single MEMBER_OF edge when someone leaves.",
+    ],
+  },
+  {
     id: "graph-write",
     name: "Other graph writes",
-    short: "User upsert / feedback",
-    what: "User profile changes and post-activity feedback also write to the graph. User edges: LIKES, AVAILABLE_AT, SPEAKS, COMFORTABLE_IN. Feedback edges: PREFERS_PERSON, AVOID.",
+    short: "Demo clear / ontology rebuild",
+    what: "Operator-level writes that don't fit elsewhere — wiping demo data, rebuilding the ontology after taxonomy edits.",
     steps: [
-      "POST /api/neo4j/user rebuilds the user's outgoing edges.",
-      "POST /api/neo4j/feedback writes AVOID for 'avoid' verdicts, accumulates PREFERS_PERSON strength for 'again' verdicts.",
+      "POST /api/neo4j/demo-clear wipes every node and edge tagged demo:true.",
+      "POST /api/neo4j/ontology re-seeds the RELATED_TO edges from taxonomy.ts.",
+      "POST /api/neo4j/seed (manual) rebuilds the full seed-users + topic catalogue.",
     ],
   },
   {
@@ -121,10 +209,17 @@ export function stageForUrl(url: string): StageId {
   if (url.startsWith("/api/transcribe")) return "transcribe";
   if (url.startsWith("/api/analyze")) return "analyse";
   if (url.startsWith("/api/suggest")) return "suggest";
+  if (url.startsWith("/api/neo4j/user")) return "signup";
+  if (url.startsWith("/api/neo4j/voice")) return "voice";
+  if (url.startsWith("/api/neo4j/interests")) return "interests";
   if (url.startsWith("/api/neo4j/activity")) return "persist";
   if (url.startsWith("/api/neo4j/match")) return "match";
+  if (url.startsWith("/api/neo4j/invites")) return "invites";
+  if (url.startsWith("/api/neo4j/verify")) return "verify";
+  if (url.startsWith("/api/neo4j/feedback")) return "feedback";
+  if (url.startsWith("/api/neo4j/group")) return "group";
   if (url.startsWith("/api/neo4j/graph") || url.startsWith("/api/neo4j/expand")) return "visualise";
-  if (url.startsWith("/api/neo4j/user") || url.startsWith("/api/neo4j/feedback") || url.startsWith("/api/neo4j/seed")) return "graph-write";
+  if (url.startsWith("/api/neo4j/demo-clear") || url.startsWith("/api/neo4j/seed") || url.startsWith("/api/neo4j/ontology")) return "graph-write";
   return "other";
 }
 
@@ -144,11 +239,18 @@ export interface StageRollup {
 }
 
 const NARRATIVE_STAGE_IDS: StageId[] = [
+  "signup",
   "transcribe",
+  "voice",
   "analyse",
+  "interests",
   "suggest",
   "persist",
   "match",
+  "invites",
+  "verify",
+  "feedback",
+  "group",
   "visualise",
 ];
 

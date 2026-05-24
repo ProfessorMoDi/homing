@@ -36,10 +36,15 @@ function classify(state: ReturnType<typeof useApp>["state"]) {
 }
 
 export default function FeedbackResult() {
-  const { state } = useApp();
+  const { state, createRecurringGroup } = useApp();
   const router = useRouter();
   const outcome = classify(state);
   const noun = activityNoun(state.activity.title);
+
+  function startGroup() {
+    createRecurringGroup();
+    router.push("/group");
+  }
 
   // Clears the cached suggestion set for the current topic signature so the
   // next /themes visit refetches genuinely fresh ideas instead of replaying
@@ -75,7 +80,7 @@ export default function FeedbackResult() {
             Want to make {noun} a recurring thing?
           </p>
           <div className="grid gap-2 mb-7">
-            <PrimaryButton onClick={() => router.push("/group")}>
+            <PrimaryButton onClick={startGroup}>
               Same people, same activity
             </PrimaryButton>
             <SecondaryButton onClick={freshSimilar}>
@@ -91,11 +96,11 @@ export default function FeedbackResult() {
               Not now
             </button>
           </div>
-          <Link href="/group">
+          <button type="button" onClick={startGroup} className="w-full">
             <SecondaryButton>
               <Heart size={14} /> See recurring group
             </SecondaryButton>
-          </Link>
+          </button>
         </>
       )}
 

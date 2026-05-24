@@ -26,7 +26,7 @@ const PEOPLE_OPTIONS = [
 
 export default function Feedback() {
   const router = useRouter();
-  const { state, setFeedback } = useApp();
+  const { state, setFeedback, submitFeedback } = useApp();
   const [step, setStep] = useState(0);
   const [rating, setRating] = useState<number | undefined>(
     state.feedback.activityRating,
@@ -50,6 +50,9 @@ export default function Feedback() {
       people: peopleFb,
       notes: notes.trim() || undefined,
     });
+    // Fire graph sync once feedback state is finalised. setState is sync so
+    // submitFeedback reads the just-patched values via its setState updater.
+    submitFeedback();
     router.push("/feedback/result");
   }
 

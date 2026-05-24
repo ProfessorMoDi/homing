@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withWrite } from "../../../../lib/neo4j";
+import { writeRated } from "../../../../lib/neo4j-writes";
 import type { PostActivityFeedback } from "../../../../lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
 
+interface ExtendedFeedback extends PostActivityFeedback {
+  activity_rating?: number;
+  event_note?: string;
+  demo?: boolean;
+}
+
 export async function POST(req: NextRequest) {
-  const feedback: PostActivityFeedback = await req.json().catch(() => null);
+  const feedback: ExtendedFeedback = await req.json().catch(() => null);
   if (!feedback?.user_id || !feedback?.activity_id) {
     return NextResponse.json(
       { error: "user_id and activity_id required" },
@@ -28,6 +35,17 @@ export async function POST(req: NextRequest) {
 
   try {
     await withWrite(async (tx) => {
+      // Persist activity rating + event note as a RATED edge.
+      if (typeof feedback.activity_rating === "number" || feedback.event_note) {
+        await writeRated(tx, {
+          user_id: feedback.user_id,
+          activity_id: feedback.activity_id,
+          rating: feedback.activity_rating,
+          event_note: feedback.event_note,
+          demo: feedback.demo === true,
+        });
+      }
+
       for (const [targetId, verdict] of Object.entries(feedback.people_feedback)) {
         if (verdict === "avoid") {
           // Create AVOID edge, remove any PREFERS_PERSON in same direction

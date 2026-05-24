@@ -316,3 +316,25 @@ function slug(s: string): string {
 export function randomPositiveRating(): number {
   return 3 + Math.floor(Math.random() * 3);
 }
+
+// Rotterdam postcode prefix → neighbourhood. The graph's neighbourhood
+// canonicaliser handles aliases; this maps a typed postcode to a candidate
+// neighbourhood the user probably lives in.
+const POSTCODE_TO_NEIGHBOURHOOD: Array<[RegExp, string]> = [
+  [/^301[1-5]/, "Centrum"],
+  [/^302[1-9]/, "Delfshaven"],
+  [/^303[1-9]/, "Noord"],
+  [/^305[1-9]/, "Hillegersberg"],
+  [/^306[1-9]/, "Kralingen"],
+  [/^307[1-9]/, "Feijenoord"],
+  [/^308[1-9]/, "Charlois"],
+];
+
+export function postcodeToNeighbourhood(postcode: string | undefined): string | undefined {
+  if (!postcode) return undefined;
+  const trimmed = postcode.trim().replace(/\s+/g, "");
+  for (const [re, name] of POSTCODE_TO_NEIGHBOURHOOD) {
+    if (re.test(trimmed)) return name;
+  }
+  return undefined;
+}

@@ -11,6 +11,175 @@
 import type { Activity } from "./types";
 import { DEMO_ID } from "./currentUser";
 
+// Patch-style sync of signup data into Neo4j as a User node. Fail-soft.
+export interface SignupSync {
+  id: string;
+  demo: boolean;
+  first_name?: string;
+  email?: string;
+  age?: number | null;
+  gender?: string;
+  gender_preference?: string;
+  postcode?: string;
+  neighbourhood?: string;
+  language_other?: string;
+  commitment_appetite?: string;
+  languages_spoken?: string[];
+  languages_comfortable?: string[];
+  availability?: string[];
+}
+
+export async function syncSignup(patch: SignupSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  } catch {
+    // fail-soft: dev panel surfaces the failure
+  }
+}
+
+export interface VoiceSync {
+  user_id: string;
+  transcript: string;
+  source: "live" | "sample";
+  language?: string;
+  demo: boolean;
+}
+
+export async function syncVoice(p: VoiceSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface InterestsSync {
+  user_id: string;
+  demo: boolean;
+  topics: Array<{
+    title: string;
+    weight?: number;
+    source?: "voice-analysis" | "signup" | "edited" | "seed";
+    hidden?: boolean;
+  }>;
+}
+
+export async function syncInterests(p: InterestsSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/interests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface InvitesCreateSync {
+  activity_id: string;
+  invited_user_ids: string[];
+  demo: boolean;
+}
+
+export async function syncInvitesCreate(p: InvitesCreateSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface InvitePatchSync {
+  activity_id: string;
+  invited_user_id: string;
+  status: "pending" | "accepted" | "declined" | "rescheduled" | "timed_out";
+  suggested_time?: string;
+  demo: boolean;
+}
+
+export async function syncInvitePatch(p: InvitePatchSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/invites", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface VerifySync {
+  user_id: string;
+  activity_id?: string;
+  method?: "idin" | "id_selfie" | "simulated";
+  demo: boolean;
+}
+
+export async function syncVerify(p: VerifySync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface FeedbackSync {
+  user_id: string;
+  activity_id: string;
+  activity_rating?: number;
+  event_note?: string;
+  people_feedback: Record<string, "again" | "neutral" | "avoid">;
+  demo: boolean;
+}
+
+export async function syncFeedback(p: FeedbackSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export interface GroupSync {
+  group_id: string;
+  name: string;
+  theme: string;
+  rhythm: string;
+  born_from_activity_id: string;
+  member_user_ids: string[];
+  demo: boolean;
+}
+
+export async function syncGroupCreate(p: GroupSync): Promise<void> {
+  try {
+    await fetch("/api/neo4j/group", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p),
+    });
+  } catch {}
+}
+
+export async function syncGroupLeave(user_id: string, group_id: string): Promise<void> {
+  try {
+    await fetch("/api/neo4j/group", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id, group_id }),
+    });
+  } catch {}
+}
+
 export async function persistAndMatch(activity: Activity): Promise<void> {
   try {
     const r = await fetch("/api/neo4j/activity", {

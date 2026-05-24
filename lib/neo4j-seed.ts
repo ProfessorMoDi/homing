@@ -29,6 +29,7 @@ const SCHEMA_STATEMENTS = [
   `CREATE CONSTRAINT timeslot_id_unique IF NOT EXISTS FOR (ts:TimeSlot) REQUIRE ts.id IS UNIQUE`,
   `CREATE CONSTRAINT language_id_unique IF NOT EXISTS FOR (l:Language) REQUIRE l.id IS UNIQUE`,
   `CREATE CONSTRAINT group_id_unique IF NOT EXISTS FOR (g:RecurringGroup) REQUIRE g.id IS UNIQUE`,
+  `CREATE CONSTRAINT voice_id_unique IF NOT EXISTS FOR (v:VoiceProfile) REQUIRE v.id IS UNIQUE`,
   `CREATE INDEX activity_status IF NOT EXISTS FOR (a:Activity) ON (a.status)`,
   `CREATE INDEX user_neighbourhood IF NOT EXISTS FOR (u:User) ON (u.neighbourhood)`,
   `CREATE INDEX user_neighbourhood_commitment IF NOT EXISTS FOR (u:User) ON (u.neighbourhood, u.commitment_appetite)`,

@@ -1123,6 +1123,8 @@
 .dev-graph__legend-dot--topic-related { background: var(--color-sage-soft); box-shadow: inset 0 0 0 1px var(--color-sage); }
 .dev-graph__legend-dot--user { background: var(--color-sky); }
 .dev-graph__legend-dot--creator { background: var(--color-clay); }
+.dev-graph__legend-dot--voice { background: var(--color-sand); border: 1px solid var(--color-sand-deep); }
+.dev-graph__legend-dot--group { background: var(--color-sand-deep); }
 .dev-graph__legend-edge {
   display: inline-block; width: 16px; height: 2px;
 }
@@ -1131,6 +1133,10 @@
   background: repeating-linear-gradient(to right, var(--color-sage) 0 4px, transparent 4px 8px);
 }
 .dev-graph__legend-edge--likes { background: var(--color-sky); }
+.dev-graph__legend-edge--invited { background: var(--color-clay); }
+.dev-graph__legend-edge--recorded { background: var(--color-sand-deep); }
+.dev-graph__legend-edge--rated { background: var(--color-sage-deep); }
+.dev-graph__legend-edge--member { background: var(--color-sand-deep); height: 1px; }
 .dev-graph__hover {
   position: absolute;
   bottom: 0.4rem;
@@ -1150,6 +1156,8 @@
 .dev-graph__hover-dot--topic-related { background: var(--color-sage-soft); box-shadow: inset 0 0 0 1px var(--color-sage); }
 .dev-graph__hover-dot--user { background: var(--color-sky); }
 .dev-graph__hover-dot--creator { background: var(--color-clay); }
+.dev-graph__hover-dot--voice { background: var(--color-sand); border: 1px solid var(--color-sand-deep); }
+.dev-graph__hover-dot--group { background: var(--color-sand-deep); }
 .dev-graph__hover-title code { color: var(--color-muted); font-size: 0.72rem; font-family: ui-monospace, monospace; }
 .dev-graph__hover-kind {
   color: var(--color-muted); font-size: 0.7rem; margin-top: 0.15rem; letter-spacing: 0.04em;

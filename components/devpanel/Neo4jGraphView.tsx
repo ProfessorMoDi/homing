@@ -17,17 +17,35 @@ import type { DevEvent } from "../../lib/devBus";
 interface PayloadNode {
   id: string;
   label: string;
-  kind: "activity" | "topic-required" | "topic-related" | "user" | "creator";
+  kind:
+    | "activity"
+    | "topic-required"
+    | "topic-related"
+    | "user"
+    | "creator"
+    | "voice"
+    | "group";
   meta?: Record<string, unknown>;
 }
 
 interface PayloadEdge {
   from: string;
   to: string;
-  kind: "REQUIRES" | "RELATED_TO" | "LIKES";
+  kind:
+    | "REQUIRES"
+    | "RELATED_TO"
+    | "LIKES"
+    | "INVITED"
+    | "RECORDED"
+    | "RATED"
+    | "VERIFIED_VIA"
+    | "BORN_FROM"
+    | "MEMBER_OF";
   weight?: number;
   tier?: string;
   related_kind?: string;
+  status?: string;
+  rating?: number;
 }
 
 interface GraphPayload {
@@ -48,6 +66,8 @@ const COLOR = {
   claySoft: "#f1d8cb",
   sky: "#8fb3c9",
   skySoft: "#dbe7ee",
+  sand: "#ead9bf",
+  sandDeep: "#b8975f",
   paper: "#ffffff",
   cream: "#f7f6f1",
   line: "#e2dfd4",
@@ -62,6 +82,8 @@ const SIZE_BY_KIND: Record<PayloadNode["kind"], number> = {
   "topic-related": 52,
   creator: 64,
   user: 58,
+  voice: 56,
+  group: 76,
 };
 
 const COLOR_BY_KIND: Record<PayloadNode["kind"], string> = {
@@ -70,12 +92,20 @@ const COLOR_BY_KIND: Record<PayloadNode["kind"], string> = {
   "topic-related": COLOR.sageSoft,
   creator: COLOR.clay,
   user: COLOR.sky,
+  voice: COLOR.sand,
+  group: COLOR.sandDeep,
 };
 
 const REL_STYLE: Record<PayloadEdge["kind"], { color: string; width: number }> = {
-  REQUIRES:    { color: COLOR.ink,  width: 3 },
-  RELATED_TO:  { color: COLOR.sage, width: 2 },
-  LIKES:       { color: COLOR.sky,  width: 2 },
+  REQUIRES:     { color: COLOR.ink,  width: 3 },
+  RELATED_TO:   { color: COLOR.sage, width: 2 },
+  LIKES:        { color: COLOR.sky,  width: 2 },
+  INVITED:      { color: COLOR.clay, width: 2.5 },
+  RECORDED:     { color: COLOR.sandDeep, width: 2 },
+  RATED:        { color: COLOR.sageDeep, width: 2.5 },
+  VERIFIED_VIA: { color: COLOR.sky,  width: 2 },
+  BORN_FROM:    { color: COLOR.sandDeep, width: 3 },
+  MEMBER_OF:    { color: COLOR.sandDeep, width: 1.5 },
 };
 
 // NVL ref shape — only the methods we actually call.
@@ -125,16 +155,20 @@ export function Neo4jGraphView({ event }: { event: DevEvent }) {
     () =>
       edges.map((e, i) => {
         const style = REL_STYLE[e.kind];
-        const weightHint =
+        const hint =
           e.kind === "RELATED_TO" && e.weight != null
             ? ` ${e.weight.toFixed(1)}`
-            : "";
+            : e.kind === "INVITED" && e.status
+              ? ` ${e.status}`
+              : e.kind === "RATED" && e.rating != null
+                ? ` ${e.rating}/5`
+                : "";
         return {
           id: `${e.from}__${e.to}__${e.kind}__${i}`,
           from: e.from,
           to: e.to,
           type: e.kind,
-          caption: `${e.kind}${weightHint}`,
+          caption: `${e.kind}${hint}`,
           color: style.color,
           width: style.width,
           captionSize: 0.85,
@@ -371,10 +405,16 @@ function Legend() {
       <Item kind="topic-related" label="Related topic" />
       <Item kind="creator" label="Creator" />
       <Item kind="user" label="User" />
+      <Item kind="voice" label="Voice profile" />
+      <Item kind="group" label="Recurring group" />
       <div className="dev-graph__legend-divider" />
       <EdgeItem cls="requires" label="REQUIRES" />
       <EdgeItem cls="related" label="RELATED_TO" />
       <EdgeItem cls="likes" label="LIKES" />
+      <EdgeItem cls="invited" label="INVITED" />
+      <EdgeItem cls="recorded" label="RECORDED" />
+      <EdgeItem cls="rated" label="RATED" />
+      <EdgeItem cls="member" label="MEMBER_OF" />
     </div>
   );
 }
