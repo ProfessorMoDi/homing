@@ -12,7 +12,9 @@ import {
 import type { Activity, Topic } from "./types";
 import {
   defaultCatanActivity,
+  getAcceptedParticipants,
   rankCandidatesForActivity,
+  resolveMatchesForActivity,
   type MatchResult,
 } from "./matching";
 import {
@@ -20,9 +22,14 @@ import {
   sampleMinorInterests,
   sampleActivityTypes,
   sampleVoiceTranscript,
+  sampleVoiceSignupHints,
+  sampleSuggestedActivities,
+  type SeedUser,
 } from "./data";
 import { extractFromTranscript } from "./voiceTopics";
 import {
+  fetchMatchCandidates,
+  persistActivity,
   persistAndMatch,
   syncFeedback,
   syncGroupCreate,
@@ -33,7 +40,7 @@ import {
   syncVerify,
   syncVoice,
 } from "./neo4jClient";
-import { currentUserContext, DEMO_ID } from "./currentUser";
+import { currentUserContext, DEMO_ID, type UserContext } from "./currentUser";
 import {
   fillSignupGaps,
   pickArchetype,
@@ -120,7 +127,57 @@ interface LiveProfile {
   minor_interests: string[];
   languages: string[];
   activity_types: string[];
+  availability?: string[];
+  commitment?: string;
   activities: SuggestedActivity[];
+}
+
+const KNOWN_LANGS = ["English", "Dutch", "German", "French", "Spanish", "Arabic"];
+
+// Map free-form language names from the LLM onto the chip vocabulary used by
+// the profile form. Anything we don't recognise collapses into "Other" + a
+// free-text label so the gap-filler can show it pre-filled.
+function mapLanguages(names: string[]): { list: string[]; other?: string } {
+  const known: string[] = [];
+  const unknown: string[] = [];
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name) continue;
+    const hit = KNOWN_LANGS.find((l) => l.toLowerCase() === name.toLowerCase());
+    if (hit) {
+      if (!known.includes(hit)) known.push(hit);
+    } else if (!unknown.includes(name)) {
+      unknown.push(name);
+    }
+  }
+  if (unknown.length > 0) known.push("Other");
+  return { list: known, other: unknown[0] };
+}
+
+// Translate the voice analysis into signup-form fields, but only for fields
+// the user hasn't already provided — so re-running analysis never clobbers a
+// real answer. gender / gender_preference / postcode are never inferred from
+// voice; the gap-filler always asks those explicitly.
+function deriveSignupFromProfile(
+  current: Signup,
+  profile: LiveProfile,
+): Partial<Signup> {
+  const patch: Partial<Signup> = {};
+  if (!current.languages_comfortable.length && profile.languages.length) {
+    const { list, other } = mapLanguages(profile.languages);
+    if (list.length) {
+      patch.languages_comfortable = list;
+      if (!current.languages_spoken.length) patch.languages_spoken = list;
+      if (other && !current.language_other) patch.language_other = other;
+    }
+  }
+  if (!current.availability.length && profile.availability?.length) {
+    patch.availability = profile.availability;
+  }
+  if (!current.commitment && profile.commitment) {
+    patch.commitment = profile.commitment;
+  }
+  return patch;
 }
 
 function deriveRhythm(day: string): string {
@@ -160,6 +217,8 @@ function suggestedToActivity(
 interface Ctx {
   state: State;
   setSignup: (patch: Partial<Signup>) => void;
+  /** Write the validated signup to Neo4j once, on Continue (not while typing). */
+  commitSignup: () => void;
   loadSampleVoice: () => void;
   /** Random archetype + transcript variant for skip paths. Patches only empty signup fields. */
   loadRandomArchetype: () => void;
@@ -172,12 +231,18 @@ interface Ctx {
   removeTopic: (id: string) => void;
   toggleHideTopic: (id: string) => void;
   setActivity: (patch: Partial<Activity>) => void;
+  /** Add an activity id to the Neo4j sync set so it pre-warms before editing. */
+  markActivityForSync: (id: string) => void;
   matches: MatchResult[];
+  matchSource: "graph" | "mock" | "loading";
+  matchLoading: boolean;
+  /** Accepted invitees (graph-ranked) that the group screens render. */
+  acceptedInvitees: SeedUser[];
   setInviteResponse: (
     userId: string,
     status: "pending" | "accepted" | "declined" | "rescheduled",
   ) => void;
-  simulateInvites: () => void;
+  simulateInvites: () => Promise<void>;
   verifyUser: (userId?: string) => void;
   setFeedback: (patch: Partial<State["feedback"]>) => void;
   /** Final submit — POST feedback into Neo4j (RATED + PREFERS_PERSON + AVOID edges). */
@@ -196,6 +261,11 @@ const STORAGE_KEY = "homing-demo-v1";
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>(initialState);
   const [hydrated, setHydrated] = useState(false);
+  const [matches, setMatches] = useState<MatchResult[]>(() =>
+    rankCandidatesForActivity(initialState.activity),
+  );
+  const [matchSource, setMatchSource] = useState<"graph" | "mock" | "loading">("mock");
+  const [matchLoading, setMatchLoading] = useState(false);
 
   // Tracks which activity ids have already been mirrored into Neo4j so we
   // don't re-fire calls on a state rehydration or a re-render. Pre-populated
@@ -235,7 +305,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     for (const a of state.suggestedActivities) {
       if (!a?.id || syncedRef.current.has(a.id)) continue;
       syncedRef.current.add(a.id);
-      persistAndMatch(a);
+      // Only create the Activity node + REQUIRES edges here. The full match
+      // runs once the user actually picks a card and taps "Ask people", so we
+      // don't fire three throwaway match queries on the suggestions screen.
+      persistActivity(a);
     }
   }, [hydrated, state.suggestedActivities]);
 
@@ -244,18 +317,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // with the default until the user actually picks something). Once the
   // activity id appears in suggestedActivities, edits flow through.
   const activitySyncedRef = useRef<string | null>(null);
+  // Signature of the activity that simulateInvites() last matched. The
+  // debounced edit-sync effect below skips re-matching it so "Ask people"
+  // fires exactly one match call instead of racing a second one.
+  const invitedActivityRef = useRef<string | null>(null);
+
+  const applyMatchResults = useCallback(
+    (activity: Activity, graphCandidates: Awaited<ReturnType<typeof fetchMatchCandidates>>) => {
+      const resolved = resolveMatchesForActivity(activity, graphCandidates);
+      setMatches(resolved);
+      setMatchSource(graphCandidates !== null ? "graph" : "mock");
+      setMatchLoading(false);
+    },
+    [],
+  );
+
+  const refreshMatches = useCallback(
+    async (activity: Activity, opts: { persist?: boolean } = {}) => {
+      setMatchLoading(true);
+      setMatchSource("loading");
+      const creatorId = activity.creator_user_id || currentUserContext(state.signup).id;
+      let graphCandidates: Awaited<ReturnType<typeof fetchMatchCandidates>> = null;
+      if (opts.persist) {
+        graphCandidates = await persistAndMatch(activity);
+      } else {
+        graphCandidates = await fetchMatchCandidates(activity.id, creatorId);
+        if (graphCandidates === null) {
+          graphCandidates = await persistAndMatch(activity);
+        }
+      }
+      applyMatchResults(activity, graphCandidates);
+    },
+    [applyMatchResults, state.signup],
+  );
+
   useEffect(() => {
     if (!hydrated) return;
     const a = state.activity;
     if (!a?.id || !syncedRef.current.has(a.id)) return;
     const sig = JSON.stringify(a);
     if (activitySyncedRef.current === sig) return;
+    // simulateInvites() already matched this exact activity — don't fire a
+    // second, redundant match call right behind it.
+    if (invitedActivityRef.current === sig) return;
     const handle = setTimeout(() => {
       activitySyncedRef.current = sig;
-      persistAndMatch(a);
+      void refreshMatches(a, { persist: true });
     }, 600);
     return () => clearTimeout(handle);
-  }, [hydrated, state.activity]);
+  }, [hydrated, state.activity, refreshMatches]);
 
   // Mirror voice transcript → VoiceProfile. Fires once per distinct
   // non-empty transcript value. Sample / live source inferred from the
@@ -301,56 +411,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(handle);
   }, [hydrated, state.topics, state.signup]);
 
-  // Debounced signup → graph sync. Fires 600ms after the user stops typing
-  // so the graph User node trails their input without hammering Neo4j on
-  // every keystroke. Demo-tagged on first write under u_demo.
-  useEffect(() => {
-    if (!hydrated) return;
-    const sig = state.signup;
-    // Don't sync until the user has at least started — first_name or any
-    // detail field. An empty signup means we're on landing/voice and the
-    // demo path hasn't been entered yet.
-    const hasAnyInput =
-      !!sig.first_name || !!sig.email || sig.age != null || !!sig.gender ||
-      !!sig.postcode || sig.languages_spoken.length > 0 ||
-      sig.availability.length > 0 || !!sig.commitment;
-    if (!hasAnyInput) return;
-
-    const ctx = currentUserContext(sig);
-    const handle = setTimeout(() => {
-      syncSignup({
-        id: ctx.id,
-        demo: ctx.demo,
-        first_name: sig.first_name || undefined,
-        email: sig.email || undefined,
-        age: sig.age ?? undefined,
-        gender: sig.gender || undefined,
-        gender_preference: sig.gender_pref || undefined,
-        postcode: sig.postcode || undefined,
-        neighbourhood: postcodeToNeighbourhood(sig.postcode),
-        language_other: sig.language_other || undefined,
-        commitment_appetite: sig.commitment || undefined,
-        languages_spoken: sig.languages_spoken.length ? sig.languages_spoken : undefined,
-        languages_comfortable: sig.languages_comfortable.length ? sig.languages_comfortable : undefined,
-        availability: sig.availability.length ? sig.availability : undefined,
-      });
-    }, 600);
-    return () => clearTimeout(handle);
-  }, [hydrated, state.signup]);
-
   const setSignup = useCallback((patch: Partial<Signup>) => {
     setState((s) => ({ ...s, signup: { ...s.signup, ...patch } }));
   }, []);
 
-  const loadSampleVoice = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      transcript: sampleVoiceTranscript,
-      topics: sampleMainTopics.map((t) => ({ ...t })),
-      minorInterests: [...sampleMinorInterests],
-      activityTypes: [...sampleActivityTypes],
-    }));
+  // Explicit one-shot signup write. Nothing is mirrored into Neo4j while the
+  // user types — the User node is created only when they tap "Continue" on a
+  // validated form (the page-level canContinue gate runs before this fires).
+  // Reads the latest signup via a setState snapshot to avoid stale closures.
+  const commitSignup = useCallback(() => {
+    let snap: { sig: Signup; ctx: UserContext } | null = null;
+    setState((s) => {
+      snap = { sig: s.signup, ctx: currentUserContext(s.signup) };
+      return s;
+    });
+    if (!snap) return;
+    const { sig, ctx } = snap as { sig: Signup; ctx: UserContext };
+    syncSignup({
+      id: ctx.id,
+      demo: ctx.demo,
+      first_name: sig.first_name || undefined,
+      email: sig.email || undefined,
+      age: sig.age ?? undefined,
+      gender: sig.gender || undefined,
+      gender_preference: sig.gender_pref || undefined,
+      postcode: sig.postcode || undefined,
+      neighbourhood: postcodeToNeighbourhood(sig.postcode),
+      language_other: sig.language_other || undefined,
+      commitment_appetite: sig.commitment || undefined,
+      languages_spoken: sig.languages_spoken.length ? sig.languages_spoken : undefined,
+      languages_comfortable: sig.languages_comfortable.length ? sig.languages_comfortable : undefined,
+      availability: sig.availability.length ? sig.availability : undefined,
+    });
   }, []);
+
+  const loadSampleVoice = useCallback(() => {
+    const creatorId = currentUserContext(state.signup).id;
+    setState((s) => {
+      const hints = sampleVoiceSignupHints;
+      const signupPatch: Partial<Signup> = {};
+      if (!s.signup.languages_spoken.length)
+        signupPatch.languages_spoken = [...hints.languages_spoken];
+      if (!s.signup.languages_comfortable.length)
+        signupPatch.languages_comfortable = [...hints.languages_comfortable];
+      if (!s.signup.availability.length)
+        signupPatch.availability = [...hints.availability];
+      if (!s.signup.commitment) signupPatch.commitment = hints.commitment;
+
+      return {
+        ...s,
+        signup: { ...s.signup, ...signupPatch },
+        transcript: sampleVoiceTranscript,
+        topics: sampleMainTopics.map((t) => ({ ...t })),
+        minorInterests: [...sampleMinorInterests],
+        activityTypes: [...sampleActivityTypes],
+        suggestedActivities: sampleSuggestedActivities.map((a, i) =>
+          suggestedToActivity(a, i, creatorId),
+        ),
+      };
+    });
+  }, [state.signup]);
 
   // Apply a random archetype + its transcript variant. Fills only empty
   // signup fields so a partial signup doesn't get clobbered. Used by the
@@ -413,6 +533,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({
         ...s,
         transcript,
+        signup: { ...s.signup, ...deriveSignupFromProfile(s.signup, profile) },
         topics: profile.topics.map((t, i) => ({
           id: `t_ai_${i}`,
           title: t.title,
@@ -471,9 +592,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, activity: { ...s.activity, ...patch } }));
   }, []);
 
-  const matches = useMemo(
-    () => rankCandidatesForActivity(state.activity),
-    [state.activity],
+  // Pre-warm the graph for an activity the moment the user picks it on
+  // /suggestions, so the edit-page debounced sync (and the eventual match)
+  // run against an Activity node that already exists.
+  const markActivityForSync = useCallback((id: string) => {
+    if (id) syncedRef.current.add(id);
+  }, []);
+
+  // The group that actually formed — accepted invitees ordered by match
+  // score. Drives the details, chat, and feedback screens so they always
+  // reflect the same people the graph match surfaced.
+  const acceptedInvitees = useMemo(
+    () =>
+      getAcceptedParticipants(
+        matches,
+        state.inviteResponses,
+        state.activity.minimum_group_size,
+      ).map((m) => m.user),
+    [matches, state.inviteResponses, state.activity.minimum_group_size],
   );
 
   const setInviteResponse = useCallback(
@@ -502,63 +638,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const simulateInvites = useCallback(() => {
-    let snap: {
-      responses: Record<string, "pending" | "accepted" | "declined" | "rescheduled">;
-      activity: Activity;
-      demo: boolean;
-    } | null = null;
+  const simulateInvites = useCallback(async (): Promise<void> => {
+    const activity = state.activity;
+    const demo = currentUserContext(state.signup).demo;
+    // Mark this activity so the debounced edit-sync effect doesn't fire a
+    // second match call behind us.
+    invitedActivityRef.current = JSON.stringify(activity);
+    syncedRef.current.add(activity.id);
+    setMatchLoading(true);
+    setMatchSource("loading");
+    const graphCandidates = await persistAndMatch(activity);
+    const ranked = resolveMatchesForActivity(activity, graphCandidates);
+    setMatches(ranked);
+    setMatchSource(graphCandidates !== null ? "graph" : "mock");
+    setMatchLoading(false);
 
-    setState((s) => {
-      const ranked = rankCandidatesForActivity(s.activity);
-      const responses: Record<
-        string,
-        "pending" | "accepted" | "declined" | "rescheduled"
-      > = {};
-      const accepting = ranked
-        .filter((m) => !m.excluded && m.score > 0)
-        .slice(0, 4);
-      accepting.forEach((m, i) => {
-        responses[m.user.id] = i < 3 ? "accepted" : "pending";
-      });
-      snap = {
-        responses,
-        activity: s.activity,
-        demo: currentUserContext(s.signup).demo,
-      };
-      return { ...s, inviteResponses: responses };
+    const responses: Record<
+      string,
+      "pending" | "accepted" | "declined" | "rescheduled"
+    > = {};
+    const accepting = ranked
+      .filter((m) => !m.excluded && m.score > 0)
+      .slice(0, 4);
+    accepting.forEach((m, i) => {
+      responses[m.user.id] = i < 3 ? "accepted" : "pending";
     });
 
-    if (!snap) return;
-    const captured = snap as {
-      responses: Record<string, "pending" | "accepted" | "declined" | "rescheduled">;
-      activity: Activity;
-      demo: boolean;
-    };
-    const userIds = Object.keys(captured.responses);
+    setState((s) => ({ ...s, inviteResponses: responses }));
+
+    const userIds = Object.keys(responses);
     if (userIds.length === 0) return;
 
-    // Make sure the Activity node exists in the graph before writing
-    // INVITED edges. persistAndMatch awaits the activity POST internally.
-    persistAndMatch(captured.activity).then(() => {
-      syncInvitesCreate({
-        activity_id: captured.activity.id,
-        invited_user_ids: userIds,
-        demo: captured.demo,
-      }).then(() => {
-        for (const [uid, status] of Object.entries(captured.responses)) {
-          if (status === "accepted" || status === "declined") {
+    const inviteEntries = accepting.map((m) => ({
+      user_id: m.user.id,
+      match_score: m.score,
+      match_reasons: m.reasons,
+    }));
+
+    // The match result is already in state, so the UI can advance to
+    // /activity/finding now. The INVITED edge writes are pure graph mirroring
+    // and nothing downstream blocks on them — fire them in the background so
+    // navigation isn't gated on 4-6 sequential AuraDB round-trips. We still
+    // create the invites first, then fan the status patches out in parallel.
+    void (async () => {
+      await syncInvitesCreate({
+        activity_id: activity.id,
+        invites: inviteEntries,
+        demo,
+      });
+      await Promise.all(
+        Object.entries(responses)
+          .filter(([, status]) => status === "accepted" || status === "declined")
+          .map(([uid, status]) =>
             syncInvitePatch({
-              activity_id: captured.activity.id,
+              activity_id: activity.id,
               invited_user_id: uid,
               status,
-              demo: captured.demo,
-            });
-          }
-        }
-      });
-    });
-  }, []);
+              demo,
+            }),
+          ),
+      );
+    })();
+  }, [state.activity, state.signup]);
 
   const verifyUser = useCallback((userId?: string) => {
     let snap: { id: string; activity_id?: string; demo: boolean } | null = null;
@@ -695,6 +836,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: Ctx = {
     state,
     setSignup,
+    commitSignup,
     loadSampleVoice,
     loadRandomArchetype,
     fillSignupRandom,
@@ -705,7 +847,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeTopic,
     toggleHideTopic,
     setActivity,
+    markActivityForSync,
     matches,
+    matchSource,
+    matchLoading,
+    acceptedInvitees,
     setInviteResponse,
     simulateInvites,
     verifyUser,

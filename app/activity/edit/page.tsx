@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, Section } from "@/components/AppShell";
 import { Label, PrimaryButton, SecondaryButton, ChipToggle } from "@/components/Bits";
 import { useApp } from "@/lib/store";
@@ -34,6 +34,12 @@ export default function EditActivity() {
   const { state, setActivity, simulateInvites } = useApp();
   const a = state.activity;
   const [noteOverridden, setNoteOverridden] = useState(false);
+  const [asking, setAsking] = useState(false);
+
+  // Warm /activity/finding so navigation after the match resolves is instant.
+  useEffect(() => {
+    router.prefetch("/activity/finding");
+  }, [router]);
 
   function handleTitleChange(newTitle: string) {
     if (noteOverridden) {
@@ -53,8 +59,13 @@ export default function EditActivity() {
     setActivity({ note: deriveNote(a.title) });
   }
 
-  function ask() {
-    simulateInvites();
+  async function ask() {
+    if (asking) return;
+    setAsking(true);
+    // Kick off the graph match before navigating so /activity/finding opens
+    // with the ranked group already in hand (and the dev panel timeline in
+    // sync). Fail-soft: persistAndMatch swallows graph errors internally.
+    await simulateInvites();
     router.push("/activity/finding");
   }
 
@@ -164,7 +175,9 @@ export default function EditActivity() {
       </Section>
 
       <div className="grid gap-2.5">
-        <PrimaryButton onClick={ask}>Ask people</PrimaryButton>
+        <PrimaryButton onClick={ask} disabled={asking}>
+          {asking ? "Matching on the graph…" : "Ask people"}
+        </PrimaryButton>
         <SecondaryButton onClick={() => router.push("/suggestions")}>
           Save for later
         </SecondaryButton>

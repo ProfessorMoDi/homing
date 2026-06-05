@@ -54,6 +54,17 @@ export function hasCached(sig: string): boolean {
   return cache.has(sig);
 }
 
+// Seed the cache directly from another source (e.g. the /api/analyze response
+// already carries activity suggestions). This lets /themes serve them from
+// memory instead of firing a second, redundant /api/suggest LLM call on the
+// live path. No-op if the list is empty or a non-stale entry already exists.
+export function setCached(sig: string, list: RawSuggestedActivity[]): void {
+  if (!sig || !Array.isArray(list) || list.length === 0) return;
+  if (cache.has(sig)) return;
+  cache.set(sig, list);
+  inflight.delete(sig);
+}
+
 export function getCached(
   sig: string,
 ): RawSuggestedActivity[] | undefined {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Clock, MapPin, Users, ChevronRight, Mail, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, Pill, GhostButton } from "@/components/Bits";
@@ -30,11 +31,16 @@ const fallbackReasons: Record<string, string> = {
 
 export default function Suggestions() {
   const router = useRouter();
-  const { state, setActivity } = useApp();
+  const { state, setActivity, markActivityForSync } = useApp();
 
   const aiCards = state.suggestedActivities ?? [];
   const cards = aiCards.length > 0 ? aiCards : fallbackCards;
   const isAi = aiCards.length > 0;
+
+  // Warm the edit route so picking a card transitions instantly.
+  useEffect(() => {
+    router.prefetch("/activity/edit");
+  }, [router]);
 
   function reasonFor(a: Activity): string {
     if (isAi) return a.note || a.description || "";
@@ -43,11 +49,14 @@ export default function Suggestions() {
 
   function start(a: Activity) {
     setActivity(a);
+    // Pre-warm the graph so the Activity node exists before the edit page
+    // debounced sync and the eventual match run.
+    markActivityForSync(a.id);
     router.push("/activity/edit");
   }
 
   return (
-    <AppShell back="/themes" title="Suggested for you">
+    <AppShell back="/signup/details" title="Suggested for you">
       <h1 className="display text-[28px] leading-tight mb-1">
         Suggested for you
       </h1>

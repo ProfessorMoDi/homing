@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Clock, MapPin, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -10,12 +10,29 @@ import { BreathingOrb, Progress, ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import { formatDayTime } from "@/lib/formatActivity";
 
-function buildStages(specificTags: string[], broaderTags: string[]): string[] {
+function buildStages(
+  specificTags: string[],
+  broaderTags: string[],
+  graphMatch: boolean,
+): string[] {
   const primary = specificTags.find(Boolean) || broaderTags.find(Boolean) || "";
   const secondary =
     broaderTags.find((t) => t !== primary) ||
     specificTags.find((t) => t !== primary) ||
     "";
+  if (graphMatch) {
+    return [
+      "Querying the interest graph",
+      primary
+        ? `Ranking people who like ${primary}`
+        : "Ranking people with overlapping interests",
+      secondary
+        ? `Expanding via ${secondary} in the ontology`
+        : "Checking one-hop related topics",
+      "Sending invites in match order",
+      "Waiting for replies",
+    ];
+  }
   return [
     "Looking for exact matches",
     primary
@@ -30,30 +47,83 @@ function buildStages(specificTags: string[], broaderTags: string[]): string[] {
 
 export default function Finding() {
   const router = useRouter();
-  const { state, matches } = useApp();
+  const { state, matches, matchSource, matchLoading } = useApp();
   const a = state.activity;
-  const stages = buildStages(a.specific_interest_tags, a.broader_interest_tags);
+  const graphMatch = matchSource === "graph";
+  const stages = buildStages(
+    a.specific_interest_tags,
+    a.broader_interest_tags,
+    graphMatch,
+  );
   const [stage, setStage] = useState(0);
   const [accepted, setAccepted] = useState(0);
 
+  // Warm the verification route while the match animation plays.
   useEffect(() => {
+    router.prefetch("/activity/verify");
+  }, [router]);
+
+  const invited = useMemo(
+    () =>
+      matches
+        .filter((m) => !m.excluded && m.score > 0)
+        .slice(0, 4),
+    [matches],
+  );
+
+  const acceptedIds = useMemo(
+    () =>
+      Object.entries(state.inviteResponses)
+        .filter(([, s]) => s === "accepted")
+        .map(([id]) => id),
+    [state.inviteResponses],
+  );
+
+  useEffect(() => {
+    if (matchLoading) {
+      setStage(0);
+      setAccepted(0);
+      return;
+    }
+
     const timers = [
-      setTimeout(() => setStage(1), 900),
-      setTimeout(() => setStage(2), 2000),
-      setTimeout(() => setStage(3), 3100),
-      setTimeout(() => setAccepted(1), 3800),
-      setTimeout(() => setAccepted(2), 4500),
-      setTimeout(() => setAccepted(3), 5300),
-      setTimeout(() => setStage(4), 5800),
+      setTimeout(() => setStage(1), 700),
+      setTimeout(() => setStage(2), 1600),
+      setTimeout(() => setStage(3), 2500),
     ];
-    return () => timers.forEach(clearTimeout);
-  }, []);
+
+    const acceptTimers: ReturnType<typeof setTimeout>[] = [];
+    invited.forEach((m, i) => {
+      acceptTimers.push(
+        setTimeout(() => {
+          setAccepted((n) => Math.max(n, i + 1));
+        }, 3200 + i * 650),
+      );
+    });
+
+    const doneTimer = setTimeout(
+      () => setStage(stages.length),
+      3200 + invited.length * 650 + 400,
+    );
+    timers.push(doneTimer);
+
+    return () => {
+      timers.forEach(clearTimeout);
+      acceptTimers.forEach(clearTimeout);
+    };
+  }, [matchLoading, invited, stages.length]);
+
+  useEffect(() => {
+    if (acceptedIds.length > 0) {
+      setAccepted((n) => Math.max(n, acceptedIds.length));
+    }
+  }, [acceptedIds.length]);
 
   const target = a.group_size_target;
   const ready = accepted >= a.minimum_group_size;
   const stagesDone = stage >= stages.length;
 
-  const topMatches = matches.filter((m) => !m.excluded).slice(0, 5);
+  const topMatches = matches.filter((m) => !m.excluded).slice(0, 6);
 
   return (
     <AppShell back="/activity/edit" title="Finding people">
@@ -70,6 +140,20 @@ export default function Finding() {
             <MapPin size={13} /> {a.location_area}
           </span>
         </div>
+        {matchLoading ? (
+          <p className="text-[12px] text-[var(--color-muted)] mt-2 inline-flex items-center gap-1.5">
+            Querying the interest graph <ThinkingDots size="small" />
+          </p>
+        ) : graphMatch ? (
+          <p className="text-[12px] text-[var(--color-sage-deep)] mt-2">
+            Ranked from Neo4j — same list as the dev panel match view
+            {topMatches[0]?.reasons[0] ? ` · top: ${topMatches[0].reasons[0]}` : ""}.
+          </p>
+        ) : (
+          <p className="text-[12px] text-[var(--color-muted)] mt-2">
+            Graph unavailable — showing local fallback ranking.
+          </p>
+        )}
       </Card>
 
       <Card className="mb-5">
@@ -159,6 +243,55 @@ export default function Finding() {
         </div>
       </Card>
 
+      {topMatches.length > 0 && (
+        <Card className="mb-5">
+          <p className="text-[14px] font-medium mb-3">
+            {graphMatch ? "Graph-ranked invites" : "Ranked candidates"}
+          </p>
+          <ul className="grid gap-2.5">
+            {topMatches.map((m, i) => {
+              const status = state.inviteResponses[m.user.id];
+              const isInvited = i < 4;
+              return (
+                <li
+                  key={m.user.id}
+                  className="card-outline p-3 text-[13px] flex flex-col gap-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-[var(--color-ink)]">
+                      {m.user.first_name}
+                      {isInvited ? (
+                        <span className="text-[var(--color-muted)] font-normal">
+                          {" "}
+                          · invited
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="tabular-nums text-[var(--color-sage-deep)] font-semibold shrink-0">
+                      {m.score}
+                    </span>
+                  </div>
+                  {m.reasons.length > 0 ? (
+                    <p className="text-[12px] text-[var(--color-muted)] leading-snug">
+                      {m.reasons.slice(0, 2).join(" · ")}
+                    </p>
+                  ) : null}
+                  {status === "accepted" ? (
+                    <p className="text-[11.5px] text-[var(--color-sage-deep)]">
+                      Accepted
+                    </p>
+                  ) : status === "pending" && isInvited ? (
+                    <p className="text-[11.5px] text-[var(--color-muted)]">
+                      Waiting…
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
       <Card className="mb-5">
         <p className="text-[14px] font-medium mb-2">
           How HOMING decides who to ask
@@ -174,32 +307,15 @@ export default function Finding() {
         </div>
       </Card>
 
-      <details className="mb-5">
-        <summary className="text-[13px] text-[var(--color-muted)] cursor-pointer">
-          Demo: see ranked candidates (debug)
-        </summary>
-        <div className="grid gap-2 mt-3">
-          {topMatches.map((m) => (
-            <div
-              key={m.user.id}
-              className="card-outline p-3 flex items-center justify-between text-[13px]"
-            >
-              <span className="text-[var(--color-ink)]">
-                Candidate · {m.user.first_name.charAt(0)}.
-              </span>
-              <span className="text-[var(--color-muted)] tabular-nums">
-                score {m.score}
-              </span>
-            </div>
-          ))}
-        </div>
-      </details>
-
       <PrimaryButton
         onClick={() => router.push("/activity/verify")}
-        disabled={!ready}
+        disabled={!ready || matchLoading}
       >
-        {ready ? (
+        {matchLoading ? (
+          <>
+            Matching on the graph <ThinkingDots size="small" />
+          </>
+        ) : ready ? (
           "Continue to verification"
         ) : (
           <>

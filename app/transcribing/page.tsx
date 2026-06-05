@@ -17,6 +17,7 @@ import { Pigeon } from "@/components/Pigeon";
 import { BreathingOrb } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import { takeAudio } from "@/lib/audioStash";
+import { setCached, topicSignature } from "@/lib/suggestionsCache";
 
 type Stage = 0 | 1 | 2 | 3 | 4; // idle / transcribing / analyzing / ready / error
 
@@ -160,6 +161,16 @@ function Transcribing() {
   const startedRef = useRef(false);
   const fakeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Warm /themes so the auto-advance (and the "Review themes" tap) land
+  // instantly instead of paying a cold route load at the end of the pipeline.
+  useEffect(() => {
+    router.prefetch("/themes");
+  }, [router]);
+
+  // Clear any pending fake-progression timers on unmount (every entry branch
+  // schedules them, but only one set a cleanup before).
+  useEffect(() => () => fakeTimersRef.current.forEach(clearTimeout), []);
+
   // Carousel auto-advance, pauses if user interacts or when stage is terminal.
   useEffect(() => {
     if (paused) return;
@@ -269,6 +280,8 @@ function Transcribing() {
           minor_interests?: string[];
           languages?: string[];
           activity_types?: string[];
+          availability?: string[];
+          commitment?: string;
           activities?: Parameters<typeof setLiveProfile>[1]["activities"];
         };
         if (analysis.topics?.length > 0) {
@@ -277,8 +290,20 @@ function Transcribing() {
             minor_interests: analysis.minor_interests ?? [],
             languages: analysis.languages ?? [],
             activity_types: analysis.activity_types ?? [],
+            availability: analysis.availability ?? [],
+            commitment: analysis.commitment ?? "",
             activities: analysis.activities ?? [],
           });
+          // Pre-seed the suggestions cache with the activities analyze already
+          // produced, keyed by the same topic signature /themes computes. This
+          // turns the /themes regeneration into an instant cache hit and skips
+          // a second, redundant /api/suggest LLM round-trip on the live path.
+          if (analysis.activities && analysis.activities.length > 0) {
+            const sig = topicSignature(
+              analysis.topics.map((t) => ({ title: t.title, tags: t.tags })),
+            );
+            setCached(sig, analysis.activities);
+          }
         }
       } else {
         console.warn("Analyze failed, keeping keyword fallback", r.status);

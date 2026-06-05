@@ -31,6 +31,21 @@ export default function Themes() {
   const [regen, setRegen] = useState<RegenStatus>("idle");
   const [retryTick, setRetryTick] = useState(0);
 
+  // Forward progress is gated on *having* suggestions, not on the refresh
+  // finishing. analyze (or the pre-seeded cache) already populated the cards,
+  // so the user can move on while a refresh is still in flight; "ready" and
+  // "error" both leave something usable on /suggestions.
+  const canContinue =
+    state.suggestedActivities.length > 0 ||
+    regen === "ready" ||
+    regen === "error";
+
+  // Warm the next two routes so the transition is instant once they tap.
+  useEffect(() => {
+    router.prefetch("/signup/details");
+    router.prefetch("/suggestions");
+  }, [router]);
+
   // Background regeneration of activity suggestions, keyed on a topic
   // signature. The module-level cache survives navigation and React Strict
   // Mode's double mount, so going back and forth never re-fires the request.
@@ -222,15 +237,15 @@ export default function Themes() {
       <RegenBadge status={regen} onRetry={onRetry} />
 
       <PrimaryButton
-        onClick={() => router.push("/suggestions")}
-        disabled={regen === "loading" || regen === "idle"}
+        onClick={() => router.push("/signup/details")}
+        disabled={!canContinue}
       >
-        {regen === "loading" || regen === "idle" ? (
+        {canContinue ? (
+          "Looks right"
+        ) : (
           <>
             Waiting for fresh ideas <ThinkingDots size="small" />
           </>
-        ) : (
-          "Looks right"
         )}
       </PrimaryButton>
       <div className="grid grid-cols-2 gap-2 mt-3">
