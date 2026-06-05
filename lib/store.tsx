@@ -27,6 +27,7 @@ import {
   type SeedUser,
 } from "./data";
 import { extractFromTranscript } from "./voiceTopics";
+import { setCached, topicSignature } from "./suggestionsCache";
 import {
   fetchMatchCandidates,
   persistActivity,
@@ -321,13 +322,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // debounced edit-sync effect below skips re-matching it so "Ask people"
   // fires exactly one match call instead of racing a second one.
   const invitedActivityRef = useRef<string | null>(null);
+  // Caches the most recent resolved match so "Ask people" can reuse a graph
+  // ranking the edit-page debounce already produced for the same activity,
+  // instead of paying a second persist + match round-trip on tap.
+  const lastMatchRef = useRef<{
+    sig: string;
+    source: "graph" | "mock";
+    matches: MatchResult[];
+  } | null>(null);
 
   const applyMatchResults = useCallback(
     (activity: Activity, graphCandidates: Awaited<ReturnType<typeof fetchMatchCandidates>>) => {
       const resolved = resolveMatchesForActivity(activity, graphCandidates);
+      const source: "graph" | "mock" = graphCandidates !== null ? "graph" : "mock";
       setMatches(resolved);
-      setMatchSource(graphCandidates !== null ? "graph" : "mock");
+      setMatchSource(source);
       setMatchLoading(false);
+      lastMatchRef.current = { sig: JSON.stringify(activity), source, matches: resolved };
     },
     [],
   );
@@ -497,6 +508,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         next.suggestedActivities = variant.activities.map((a, i) =>
           suggestedToActivity(a, i, creatorId),
         );
+        // Pre-seed the suggestions cache with this variant's hand-curated
+        // activities, keyed by the same topic signature /themes computes, so
+        // the skip-path never fires an /api/suggest LLM call on /themes.
+        setCached(
+          topicSignature(
+            variant.topics.map((t) => ({ title: t.title, tags: t.tags })),
+          ),
+          variant.activities,
+        );
       }
       return next;
     });
@@ -641,17 +661,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const simulateInvites = useCallback(async (): Promise<void> => {
     const activity = state.activity;
     const demo = currentUserContext(state.signup).demo;
+    const sig = JSON.stringify(activity);
     // Mark this activity so the debounced edit-sync effect doesn't fire a
     // second match call behind us.
-    invitedActivityRef.current = JSON.stringify(activity);
+    invitedActivityRef.current = sig;
     syncedRef.current.add(activity.id);
-    setMatchLoading(true);
-    setMatchSource("loading");
-    const graphCandidates = await persistAndMatch(activity);
-    const ranked = resolveMatchesForActivity(activity, graphCandidates);
-    setMatches(ranked);
-    setMatchSource(graphCandidates !== null ? "graph" : "mock");
-    setMatchLoading(false);
+
+    // Reuse the warm graph ranking the edit-page debounce already produced
+    // for this exact activity — no persist + match round-trip on tap, and no
+    // "loading" flash on /activity/finding. Only reuse a graph result; a mock
+    // fallback still retries the graph in case it has come back up.
+    const warm = lastMatchRef.current;
+    let ranked: MatchResult[];
+    if (warm && warm.sig === sig && warm.source === "graph") {
+      ranked = warm.matches;
+    } else {
+      setMatchLoading(true);
+      setMatchSource("loading");
+      const graphCandidates = await persistAndMatch(activity);
+      ranked = resolveMatchesForActivity(activity, graphCandidates);
+      const source: "graph" | "mock" = graphCandidates !== null ? "graph" : "mock";
+      setMatches(ranked);
+      setMatchSource(source);
+      setMatchLoading(false);
+      lastMatchRef.current = { sig, source, matches: ranked };
+    }
 
     const responses: Record<
       string,
