@@ -43,7 +43,7 @@ export default function Landing() {
               href="/demo"
               className="text-[12.5px] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
             >
-              Demo map
+              Demo
             </Link>
           )}
         </div>
@@ -94,7 +94,7 @@ export default function Landing() {
         <div className="animate-hero-rise delay-3 mt-auto pt-10 grid gap-3">
           {mode === "demo" ? (
             <>
-              <Link href="/network" className="w-full">
+              <Link href="/demo" className="w-full">
                 <PrimaryButton>
                   <span className="inline-flex items-center justify-center gap-1.5">
                     <Sparkles size={16} />

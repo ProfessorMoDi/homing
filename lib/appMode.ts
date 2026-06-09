@@ -12,16 +12,22 @@
 //                 profiles, and LIKES edges into the shared graph so the
 //                 network fills up with real people.
 //
-//   • "demo"    — the read-only showcase build. Connects to whatever network
-//                 the collect build has accumulated and finds connections in a
-//                 throwaway session. Writes NOTHING — every Neo4j write is a
-//                 no-op (see lib/neo4jClient.ts) and matching runs against the
-//                 live graph via the read-only /api/neo4j/match-live route.
+//   • "demo"    — the read-only showcase. Lives entirely under the /demo path.
+//                 Connects to whatever network the collect build has
+//                 accumulated and finds connections in a throwaway session.
+//                 Writes NOTHING — every Neo4j write is a no-op (see
+//                 lib/neo4jClient.ts) and matching runs against the live graph
+//                 via the read-only /api/neo4j/match-live route.
 //
-// Local override: append ?mode=collect|demo|full to any URL to flip the client
-// into that mode (persisted in localStorage, mirrors lib/devMode.tsx). Lets one
-// local dev server exercise all three builds without rebuilding. Server-side
-// code always sees the env default — only the client honours the override.
+// Single deployment, path-driven: the whole site runs the env default (set
+// NEXT_PUBLIC_APP_MODE=collect for the build you send to friends), and visiting
+// /demo flips into the read-only showcase for that page. So "normal site =
+// collect, /demo = demo" from one Vercel project sharing one graph.
+//
+// Local override: append ?mode=collect|full to any URL to force that mode on
+// the client (persisted in localStorage, mirrors lib/devMode.tsx) so one dev
+// server can exercise every build. Server-side code always sees the env
+// default — only the client honours the path/override.
 
 export type AppMode = "full" | "collect" | "demo";
 
@@ -38,20 +44,36 @@ function normalize(v: string | null | undefined): AppMode | null {
 export const ENV_APP_MODE: AppMode =
   normalize(process.env.NEXT_PUBLIC_APP_MODE) ?? "full";
 
-// Resolve the active mode. On the client we let a ?mode= URL param (or a
-// previously-stored override) win, so the same dev server can demo any build.
+// Path prefixes that are always the read-only demo, regardless of env. The
+// showcase lives under /demo so "the normal site" and "/demo" can coexist in
+// one deployment.
+const DEMO_PATHS = ["/demo"];
+
+function isDemoPath(pathname: string): boolean {
+  return DEMO_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
+// Resolve the active mode (client-side). Precedence:
+//   1. /demo path  → demo (never persisted; purely scoped to that page)
+//   2. ?mode= param → collect|full override for local testing (persisted)
+//   3. stored override from a previous ?mode=
+//   4. env default (NEXT_PUBLIC_APP_MODE)
 export function appMode(): AppMode {
   if (typeof window === "undefined") return ENV_APP_MODE;
   try {
+    if (isDemoPath(window.location.pathname)) return "demo";
+
     const param = normalize(
       new URLSearchParams(window.location.search).get(URL_PARAM),
     );
-    if (param) {
+    // Only persist non-demo overrides — demo is path-scoped, so a stale stored
+    // "demo" must never bleed into the collect flow.
+    if (param && param !== "demo") {
       localStorage.setItem(STORAGE_KEY, param);
       return param;
     }
     const stored = normalize(localStorage.getItem(STORAGE_KEY));
-    if (stored) return stored;
+    if (stored && stored !== "demo") return stored;
   } catch {}
   return ENV_APP_MODE;
 }

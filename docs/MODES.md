@@ -1,14 +1,19 @@
 # HOMING — Build Modes
 
-One codebase ships as **three distinct products**, selected by a single
-environment variable (`NEXT_PUBLIC_APP_MODE`) and all sharing **one Neo4j
-graph**. The collect build fills the network; the demo build reads it.
+**One Vercel project, one Neo4j graph.** The normal site is the version you
+send to friends (it fills the network); visiting **`/demo`** is the read-only
+showcase that reads the same network. A build-time env var
+(`NEXT_PUBLIC_APP_MODE`) picks what "the normal site" is.
 
-| Mode | Who it's for | Flow | Writes to graph? |
-|------|--------------|------|------------------|
-| `full` *(default)* | Hackathon demo / dev | signup → voice → themes → suggestions → match → verify → chat → feedback → group | Yes |
-| `collect` | The link you send to friends | signup → voice → themes → quick profile → **done** | **Yes — real users** |
-| `demo` | Public showcase | landing → **network** ("find your people") | **No — read-only** |
+| Mode | Where | Who it's for | Flow | Writes? |
+|------|-------|--------------|------|---------|
+| `collect` | normal site (set env) | The link you send to friends | signup → voice → themes → quick profile → **done** | **Yes — real users** |
+| `demo` | the **`/demo`** path (always) | Public showcase | `/demo` → "find your people" | **No — read-only** |
+| `full` | normal site (default if env unset) | Hackathon demo / dev | signup → … → match → verify → chat → feedback → group | Yes |
+
+`/demo` is demo mode **regardless of env** — it's path-driven, so the normal
+site and the showcase live in the same deployment. Set the env var to choose
+what the rest of the site (everything outside `/demo`) does.
 
 ---
 
@@ -32,43 +37,44 @@ friend signs up through the collect link.
 
 ---
 
-## Deploying (recommended: two Vercel projects, one database)
+## Deploying (one Vercel project)
 
-Point both projects at the **same** `NEO4J_*` env values, then differ only on the
-mode:
+Set a single env var on the project:
 
 ```bash
-# Collect deployment — the link you share
-NEXT_PUBLIC_APP_MODE=collect
-
-# Demo deployment — the read-only showcase
-NEXT_PUBLIC_APP_MODE=demo
+NEXT_PUBLIC_APP_MODE=collect   # the normal site = the friends/data-collection build
 ```
 
-`vercel env add NEXT_PUBLIC_APP_MODE` per project (or set it in the dashboard).
-`NEXT_PUBLIC_*` is inlined at build time, so a redeploy is needed after changing
-it.
+`vercel env add NEXT_PUBLIC_APP_MODE` (or set it in the dashboard).
+`NEXT_PUBLIC_*` is inlined at build time, so redeploy after changing it.
 
-Seed the shared graph once (12 starter personas + ontology) so the demo isn't
+- **Send friends the root URL** — they go through signup → voice → interests and
+  land in the network.
+- **Share `https://<your-app>/demo`** for the read-only "find your people"
+  showcase. It reads the same graph the friends are filling, and writes nothing.
+
+Seed the shared graph once (12 starter personas + ontology) so `/demo` isn't
 empty before friends sign up:
 
 ```bash
-curl -X POST https://<your-collect-deploy>/api/neo4j/seed
+curl -X POST https://<your-app>/api/neo4j/seed
 ```
 
 ---
 
-## Testing all three locally
-
-`NEXT_PUBLIC_APP_MODE` sets the default, but the **client** honours a `?mode=`
-override (persisted in `localStorage`, same pattern as `?dev=1`). One dev server
-exercises everything:
+## Testing locally
 
 ```
-http://localhost:3457/?mode=collect   → collect landing + flow
-http://localhost:3457/?mode=demo       → demo "find your people"
-http://localhost:3457/?mode=full       → full demo (reset override)
+http://localhost:3457/demo             → the read-only showcase (always)
+http://localhost:3457/?mode=collect    → force the collect site
+http://localhost:3457/?mode=full       → force the full demo
 ```
+
+`/demo` is always the showcase. For the rest of the site, `NEXT_PUBLIC_APP_MODE`
+sets the default and the client honours a `?mode=collect|full` override
+(persisted in `localStorage`, same pattern as `?dev=1`) so one dev server
+exercises everything. `?mode=demo` is intentionally ignored — demo is the
+`/demo` path, never a sticky global state.
 
 ---
 
@@ -79,10 +85,11 @@ http://localhost:3457/?mode=full       → full demo (reset override)
 | `lib/appMode.ts` | New. Source of truth: `appMode()`, `isFull/isCollect/isDemo`, `writesEnabled()`. Env default + client `?mode=` override. |
 | `lib/neo4jClient.ts` | Every write helper early-returns when `!writesEnabled()` (demo mode writes nothing). Reads/matching untouched. |
 | `app/api/neo4j/match-live/route.ts` | New **read-only** matcher. Takes raw interests, canonicalises them, ranks the whole graph by shared-interest score. No Activity node, no writes. |
-| `app/network/page.tsx` | New. The demo build's "find your people" compatibility leaderboard. |
+| `app/demo/page.tsx` | The "find your people" compatibility leaderboard (was the demo navigator). The `/demo` path is always demo mode. |
+| `app/map/page.tsx` | The old presenter navigator, relocated off `/demo`. |
 | `app/collect/done/page.tsx` | New. The collect build's terminal "you're in the flock" screen. |
 | `app/signup/details/page.tsx` | In collect mode, finishing the profile routes to `/collect/done` instead of `/suggestions`. |
-| `app/page.tsx` | Landing is mode-aware: demo CTA → `/network`; collect copy + hidden demo-skip; full unchanged. |
+| `app/page.tsx` | Landing is mode-aware: collect copy + hidden demo-skip; header "Demo" link → `/demo`; full unchanged. |
 
 The `full` build is unchanged — the existing demo, `DEMO.md` playbook, and dev
 panel all work exactly as before when `NEXT_PUBLIC_APP_MODE` is unset.
