@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppProvider } from "@/lib/store";
+import { AuthProvider } from "@/lib/auth";
 import { ClientShell } from "@/components/ClientShell";
 import { ChunkErrorRecovery } from "@/components/ChunkErrorRecovery";
 
@@ -39,7 +40,9 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ChunkErrorRecovery />
         <AppProvider>
-          <ClientShell>{children}</ClientShell>
+          <AuthProvider>
+            <ClientShell>{children}</ClientShell>
+          </AuthProvider>
         </AppProvider>
       </body>
     </html>
