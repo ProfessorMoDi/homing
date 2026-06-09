@@ -10,6 +10,7 @@
 
 import type { Activity } from "./types";
 import { DEMO_ID } from "./currentUser";
+import { writesEnabled } from "./appMode";
 
 // Patch-style sync of signup data into Neo4j as a User node. Fail-soft.
 export interface SignupSync {
@@ -30,6 +31,7 @@ export interface SignupSync {
 }
 
 export async function syncSignup(patch: SignupSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/user", {
       method: "POST",
@@ -50,6 +52,7 @@ export interface VoiceSync {
 }
 
 export async function syncVoice(p: VoiceSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/voice", {
       method: "POST",
@@ -71,6 +74,7 @@ export interface InterestsSync {
 }
 
 export async function syncInterests(p: InterestsSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/interests", {
       method: "POST",
@@ -80,13 +84,21 @@ export async function syncInterests(p: InterestsSync): Promise<void> {
   } catch {}
 }
 
+export interface InviteCreateEntry {
+  user_id: string;
+  match_score: number;
+  match_reasons: string[];
+}
+
 export interface InvitesCreateSync {
   activity_id: string;
-  invited_user_ids: string[];
+  invited_user_ids?: string[];
+  invites?: InviteCreateEntry[];
   demo: boolean;
 }
 
 export async function syncInvitesCreate(p: InvitesCreateSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/invites", {
       method: "POST",
@@ -105,6 +117,7 @@ export interface InvitePatchSync {
 }
 
 export async function syncInvitePatch(p: InvitePatchSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/invites", {
       method: "PATCH",
@@ -122,6 +135,7 @@ export interface VerifySync {
 }
 
 export async function syncVerify(p: VerifySync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/verify", {
       method: "POST",
@@ -141,6 +155,7 @@ export interface FeedbackSync {
 }
 
 export async function syncFeedback(p: FeedbackSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/feedback", {
       method: "POST",
@@ -161,6 +176,7 @@ export interface GroupSync {
 }
 
 export async function syncGroupCreate(p: GroupSync): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/group", {
       method: "POST",
@@ -171,6 +187,7 @@ export async function syncGroupCreate(p: GroupSync): Promise<void> {
 }
 
 export async function syncGroupLeave(user_id: string, group_id: string): Promise<void> {
+  if (!writesEnabled()) return;
   try {
     await fetch("/api/neo4j/group", {
       method: "DELETE",
@@ -180,31 +197,76 @@ export async function syncGroupLeave(user_id: string, group_id: string): Promise
   } catch {}
 }
 
-export async function persistAndMatch(activity: Activity): Promise<void> {
+/** Candidate row returned by POST /api/neo4j/match — shared by UI and dev panel. */
+export interface GraphMatchCandidate {
+  user_id: string;
+  first_name: string;
+  neighbourhood: string;
+  score: number;
+  breakdown?: {
+    interest: number;
+    availability: number;
+    language: number;
+    commitment: number;
+    location: number;
+    preference: number;
+  };
+  paths?: Array<{
+    req_id: string;
+    req_title: string;
+    via_id: string;
+    via_title: string;
+    weight: number;
+    tier: "specific" | "broader";
+  }>;
+  reasons: string[];
+}
+
+export async function persistActivity(activity: Activity): Promise<boolean> {
+  if (!writesEnabled()) return false;
   try {
     const r = await fetch("/api/neo4j/activity", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(activity),
     });
-    if (!r.ok) return; // Stop the chain — match will error against a missing activity.
+    return r.ok;
   } catch {
-    return;
+    return false;
   }
+}
 
-  // Match — runs independently. Errors are surfaced in the dev panel; we
-  // don't await its completion to keep the UX snappy.
-  fetch("/api/neo4j/match", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      activityId: activity.id,
-      creatorId: activity.creator_user_id || DEMO_ID,
-    }),
-  }).catch(() => {});
+export async function fetchMatchCandidates(
+  activityId: string,
+  creatorId: string,
+): Promise<GraphMatchCandidate[] | null> {
+  try {
+    const r = await fetch("/api/neo4j/match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activityId, creatorId }),
+    });
+    if (!r.ok) return null;
+    const data = (await r.json()) as { candidates?: GraphMatchCandidate[] };
+    return Array.isArray(data.candidates) ? data.candidates : [];
+  } catch {
+    return null;
+  }
+}
+
+export async function persistAndMatch(activity: Activity): Promise<GraphMatchCandidate[] | null> {
+  const ok = await persistActivity(activity);
+  if (!ok) return null;
+
+  const creatorId = activity.creator_user_id || DEMO_ID;
+  const candidates = await fetchMatchCandidates(activity.id, creatorId);
 
   // Subgraph — drives the SVG render in the dev panel. Same fail-soft policy.
-  fetch(`/api/neo4j/graph?activityId=${encodeURIComponent(activity.id)}`).catch(() => {});
+  fetch(`/api/neo4j/graph?activityId=${encodeURIComponent(activity.id)}`).catch(
+    () => {},
+  );
+
+  return candidates;
 }
 
 // Fan out across the suggested set. We chain activity → match per item so
