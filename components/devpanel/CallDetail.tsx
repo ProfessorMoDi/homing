@@ -119,7 +119,13 @@ function SummaryView({ event }: { event: DevEvent }) {
 
       {/* Endpoint-specific visualisations */}
       {event.url.startsWith("/api/neo4j/match") ? (
-        <MatchBreakdown event={event} />
+        <>
+          <p className="dev-detail__parity">
+            This is the exact ranking the mobile screen renders on{" "}
+            <code>/activity/finding</code>.
+          </p>
+          <MatchBreakdown event={event} />
+        </>
       ) : null}
       {event.url.startsWith("/api/neo4j/activity") ? (
         <CanonicalisationTrace event={event} />

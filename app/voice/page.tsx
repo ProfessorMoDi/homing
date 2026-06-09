@@ -18,7 +18,7 @@ function format(secs: number) {
 
 export default function VoiceOnboarding() {
   const router = useRouter();
-  const { loadRandomArchetype } = useApp();
+  const { loadSampleVoice } = useApp();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -206,12 +206,12 @@ export default function VoiceOnboarding() {
   }
 
   function onSample() {
-    loadRandomArchetype();
+    loadSampleVoice();
     router.push("/transcribing?sample=1");
   }
 
   return (
-    <AppShell back="/signup/details" title="Voice onboarding">
+    <AppShell back="/signup" title="Voice onboarding">
       <p className="text-[14px] text-[var(--color-ink-soft)] mb-3 text-center">
         Talk for around two minutes.
       </p>

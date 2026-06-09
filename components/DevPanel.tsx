@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { devBus, useDevEvents, type DevEvent } from "../lib/devBus";
 import { useDevMode } from "../lib/devMode";
 import { useApp } from "../lib/store";
@@ -27,11 +28,14 @@ import { stageForUrl, type StageId } from "./devpanel/pipeline";
 export function DevPanel() {
   const events = useDevEvents();
   const { toggle } = useDevMode();
-  const { state } = useApp();
+  const { state, matches, matchSource, matchLoading } = useApp();
+  const pathname = usePathname();
   const userCtx = useMemo(() => currentUserContext(state.signup), [state.signup]);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [focusedStage, setFocusedStage] = useState<StageId | "auto">("auto");
   const [clearing, setClearing] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [seedNote, setSeedNote] = useState<string | null>(null);
 
   async function clearDemo() {
     setClearing(true);
@@ -40,6 +44,33 @@ export function DevPanel() {
     } catch {}
     setClearing(false);
   }
+
+  async function seedGraph() {
+    setSeeding(true);
+    setSeedNote(null);
+    try {
+      const r = await fetch("/api/neo4j/seed", { method: "POST" });
+      const data = (await r.json().catch(() => null)) as
+        | { users?: number; topics?: number }
+        | null;
+      setSeedNote(
+        r.ok && data
+          ? `Seeded ${data.users ?? "?"} users · ${data.topics ?? "?"} topics`
+          : "Seed failed",
+      );
+    } catch {
+      setSeedNote("Seed failed");
+    }
+    setSeeding(false);
+  }
+
+  // On the finding screen the match is the headline. Auto-focus the match
+  // stage so the panel and the mobile screen tell the same story.
+  useEffect(() => {
+    if (pathname === "/activity/finding") {
+      setFocusedStage("match");
+    }
+  }, [pathname]);
 
   // Drop a stale pin if its event scrolled out of the ring.
   useEffect(() => {
@@ -92,6 +123,15 @@ export function DevPanel() {
           <button
             type="button"
             className="dev-panel__action"
+            onClick={seedGraph}
+            disabled={seeding}
+            title="Run schema migration + seed the 12 EUR users and topic ontology"
+          >
+            {seeding ? "Seeding…" : "Seed graph"}
+          </button>
+          <button
+            type="button"
+            className="dev-panel__action"
             onClick={clearDemo}
             disabled={clearing}
             title="Wipe every node and edge tagged demo:true from Neo4j"
@@ -117,6 +157,13 @@ export function DevPanel() {
         </div>
       </header>
 
+      <LiveState
+        matchSource={matchSource}
+        matchLoading={matchLoading}
+        topMatches={matches.slice(0, 3)}
+        seedNote={seedNote}
+      />
+
       <PipelineNarrative
         events={events}
         focusedStage={focusedStage}
@@ -139,6 +186,63 @@ export function DevPanel() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function LiveState({
+  matchSource,
+  matchLoading,
+  topMatches,
+  seedNote,
+}: {
+  matchSource: "graph" | "mock" | "loading";
+  matchLoading: boolean;
+  topMatches: Array<{ user: { id: string; first_name: string }; score: number; reasons: string[] }>;
+  seedNote: string | null;
+}) {
+  const sourceLabel = matchLoading
+    ? "loading"
+    : matchSource === "graph"
+      ? "Neo4j graph"
+      : matchSource === "mock"
+        ? "local fallback"
+        : matchSource;
+
+  return (
+    <div className="dev-livestate">
+      <div className="dev-livestate__row">
+        <span className="dev-livestate__label">App match source</span>
+        <span
+          className={
+            "dev-livestate__source dev-livestate__source--" +
+            (matchLoading ? "loading" : matchSource)
+          }
+        >
+          {sourceLabel}
+        </span>
+        {seedNote ? (
+          <span className="dev-livestate__note">{seedNote}</span>
+        ) : null}
+      </div>
+      {topMatches.length > 0 ? (
+        <ol className="dev-livestate__matches">
+          {topMatches.map((m) => (
+            <li key={m.user.id} className="dev-livestate__match">
+              <span className="dev-livestate__match-name">{m.user.first_name}</span>
+              <span className="dev-livestate__match-score">{m.score}</span>
+              {m.reasons[0] ? (
+                <span className="dev-livestate__match-reason">{m.reasons[0]}</span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="dev-livestate__hint">
+          The list the mobile screen renders. It mirrors the latest{" "}
+          <code>/api/neo4j/match</code> response when the graph is reachable.
+        </p>
+      )}
     </div>
   );
 }

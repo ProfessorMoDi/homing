@@ -130,6 +130,22 @@ export async function upsertUser(tx: ManagedTransaction, user: SeedUser): Promis
     );
   }
 
+  if (user.id === "u_david") {
+    for (const dislike of ["board games", "catan"]) {
+      const { id: topicId, title, canonical } = canonicalizeTopic(dislike);
+      if (!topicId) continue;
+      await tx.run(
+        `MERGE (t:Topic {id: $topicId})
+           ON CREATE SET t.title = $title, t.tier = 'specific', t.canonical = $canonical
+           ON MATCH  SET t.title = coalesce(t.title, $title)
+         WITH t
+         MATCH (u:User {id: $userId})
+         MERGE (u)-[:DISLIKES]->(t)`,
+        { topicId, title, canonical, userId: user.id },
+      );
+    }
+  }
+
   // Replace AVAILABLE_AT
   await tx.run(
     `MATCH (u:User {id: $id})-[r:AVAILABLE_AT]->(:TimeSlot) DELETE r`,

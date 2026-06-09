@@ -1,5 +1,56 @@
 import { type SeedUser, seedUsers } from "./data";
+import type { GraphMatchCandidate } from "./neo4jClient";
 import type { Activity } from "./types";
+
+const seedById = new Map(seedUsers.map((u) => [u.id, u]));
+
+function seedUserFromGraph(c: GraphMatchCandidate): SeedUser {
+  const existing = seedById.get(c.user_id);
+  if (existing) return existing;
+  return {
+    id: c.user_id,
+    first_name: c.first_name,
+    email: "",
+    age: 0,
+    gender: "prefer-not-to-say",
+    gender_preference: "either",
+    neighbourhood: c.neighbourhood || "",
+    languages_spoken: [],
+    languages_comfortable: [],
+    availability: [],
+    commitment_appetite: "try-once",
+    verification_status: "verified",
+    profile_completed: true,
+    interests: [],
+    voice_quote: "",
+  };
+}
+
+/** Map Neo4j match response into UI MatchResult rows (seed profile when known). */
+export function graphCandidatesToMatchResults(
+  candidates: GraphMatchCandidate[],
+): MatchResult[] {
+  return candidates.map((c) => ({
+    user: seedUserFromGraph(c),
+    score: c.score,
+    reasons: c.reasons?.length ? c.reasons : [],
+    excluded: false,
+  }));
+}
+
+/** Prefer graph-ranked candidates; fall back to local mock ranker when Neo4j is down. */
+export function resolveMatchesForActivity(
+  activity: Activity,
+  graphCandidates: GraphMatchCandidate[] | null | undefined,
+  excludeUserIds: string[] = [],
+): MatchResult[] {
+  if (graphCandidates !== null && graphCandidates !== undefined) {
+    return graphCandidatesToMatchResults(graphCandidates).filter(
+      (m) => !excludeUserIds.includes(m.user.id),
+    );
+  }
+  return rankCandidatesForActivity(activity, excludeUserIds);
+}
 
 export interface MatchResult {
   user: SeedUser;
@@ -110,6 +161,24 @@ export function rankCandidatesForActivity(
     .filter((u) => !excludeUserIds.includes(u.id))
     .map((u) => scoreUserForActivity(u, activity))
     .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * The people who actually joined: invitees whose response is "accepted",
+ * ordered by their match score. Falls back to the top-ranked candidates when
+ * no responses exist yet (e.g. a page is opened directly in the demo) so the
+ * details / chat / feedback screens always have a consistent group.
+ */
+export function getAcceptedParticipants(
+  matches: MatchResult[],
+  inviteResponses: Record<string, string>,
+  minSize: number,
+): MatchResult[] {
+  const accepted = matches.filter(
+    (m) => inviteResponses[m.user.id] === "accepted",
+  );
+  if (accepted.length > 0) return accepted;
+  return matches.filter((m) => !m.excluded && m.score > 0).slice(0, Math.max(minSize, 3));
 }
 
 export const defaultCatanActivity: Activity = {

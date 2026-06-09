@@ -215,58 +215,80 @@ export const seedUsers: SeedUser[] = [
 export const findUser = (id: string): SeedUser | undefined =>
   seedUsers.find((u) => u.id === id);
 
-export const sampleVoiceTranscript = `So, lately I've been getting back into board games. Mostly Catan honestly — I used to play a lot with my brother and I keep thinking about it. I'd love to do a proper round again, nothing too competitive, just a chill Thursday evening kind of thing.
-I also like strategy games in general, like Ticket to Ride, even a casual chess match every now and then. I'm comfortable in English mostly but I also speak German if anyone else does. I'm in Kralingen so anything near campus would be ideal.
-I think a small group of four would be perfect — I'm not into big game nights with twelve people. Just one game, one drink, see how it feels. Maybe make it a regular thing if it clicks, but no pressure.
-Thursday evenings work best for me. I'm not really available on weekends because I usually visit family. I'm honestly just looking to start something low-pressure, see if it sticks.`;
+export const sampleVoiceTranscript = `So, um… where do I even start. I moved to Rotterdam about eight months ago for EUR — I'm in my third year now — and I kind of assumed that by this point I'd have a normal rhythm. But honestly most days I'm just bouncing between my room in Kralingen and the library, and I don't really know how people here actually build a social life without it feeling like networking or something.
+
+Back home in Munich I had this Thursday thing with my brother and two friends from school — we'd play Catan, eat crisps, complain about sheep, nothing serious. I miss that stupid slow evening. I'd love one proper round again. Ticket to Ride is fine too. I am not looking for one of those massive game nights with twelve strangers. That sounds exhausting.
+
+I've also gotten into film photography this year — actual film, not just my phone. I walk a lot. Kralingse Bos when the light is good, the harbour around golden hour, random side streets near campus. Mostly alone because I don't really know who to ask along. A slow Saturday walk with two or three people who are okay with quiet would be perfect.
+
+Cooking is another thing I keep circling. I make a lot of Asian food — ramen, dumplings — but always just for myself, and it feels silly. I'd love to cook with people once. Shop together in the morning, cook in the afternoon, eat. I have a decent kitchen near campus in Kralingen, so somewhere close works.
+
+Language-wise I'm completely fine in English, German is my first language, and my Dutch is still rough — I understand more than I speak. Weekday evenings are hit or miss because of classes, but Thursday evenings are usually free. Weekends I sometimes go see family but not every week — I'm pretty flexible otherwise.
+
+I'm not trying to find a best-friend group or anything intense. Just something low-pressure. Try it once, see if it feels normal. Maybe it becomes a regular thing if it clicks. Four people max — I hate when groups get huge.
+
+I keep walking past the Erasmusbrug on my way home thinking I should actually do the stuff I already enjoy, with other people who enjoy it too. That's basically it. I don't know — I'm a bit lost here, but I'm trying.`;
 
 export const sampleMainTopics = [
   {
     id: "t_catan",
-    title: "Settlers of Catan",
+    title: "Catan",
     explanation:
-      "You talked about wanting to play Catan again in a low-pressure setting.",
-    tags: ["catan", "board games", "specific game"],
+      "You miss the slow Thursday Catan evenings you had back home in Munich.",
+    tags: ["catan", "board games", "thursday-evening"],
   },
   {
     id: "t_boardgames",
     title: "Board games",
-    explanation: "Strategy games and casual game nights came up strongly.",
-    tags: ["board games", "strategy games", "casual games"],
+    explanation:
+      "Ticket to Ride and casual strategy games came up — small groups only.",
+    tags: ["board games", "strategy games", "ticket to ride"],
   },
   {
-    id: "t_thursday",
-    title: "Thursday evenings",
-    explanation: "This seems like a realistic time for you.",
-    tags: ["thursday-evening"],
+    id: "t_film",
+    title: "Film photography",
+    explanation:
+      "You shoot on actual film and walk for light — Kralingse Bos, the harbour.",
+    tags: ["film photography", "photography", "golden hour"],
   },
   {
-    id: "t_languages",
-    title: "English and German",
-    explanation: "You seem comfortable with both.",
-    tags: ["english", "german"],
+    id: "t_walks",
+    title: "Rotterdam walks",
+    explanation:
+      "Slow Saturday walks near campus — you'd like quiet company, not a big group.",
+    tags: ["rotterdam walks", "weekend walks", "kralingen"],
+  },
+  {
+    id: "t_cooking",
+    title: "Cooking together",
+    explanation:
+      "You cook Asian food alone too often and want to shop and cook with others.",
+    tags: ["cooking", "asian food", "ramen"],
   },
   {
     id: "t_smallgroup",
     title: "Small groups",
-    explanation: "You mentioned preferring something calm over a big event.",
+    explanation:
+      "Four people max — you find large meetups exhausting.",
     tags: ["small group", "low-pressure"],
   },
 ];
 
 export const sampleMinorInterests = [
-  "Coffee on the side",
-  "Near campus",
-  "Ticket to Ride",
-  "One drink, one game",
-  "Open to making it weekly",
+  "Misses Munich Thursday routine",
+  "Erasmusbrug walks on the way home",
+  "Dutch still rough but improving",
+  "Coffee after activities",
+  "Shop together then cook",
+  "Not looking for networking vibes",
 ];
 
 export const sampleActivityTypes = [
+  "Low-pressure first meeting",
   "Sit-down",
   "Games",
-  "Low-pressure first meeting",
-  "Activity-led conversation",
+  "Creative",
+  "Outdoors",
 ];
 
 // Three hardcoded activity suggestions matched to the sample voice
@@ -280,7 +302,7 @@ export const sampleSuggestedActivities = [
   {
     title: "Start a Catan round",
     description:
-      "One game of Catan on a Thursday evening, low-pressure, near campus.",
+      "One slow Thursday Catan game near campus — crisps, no competitiveness.",
     day: "Thursday",
     time: "19:30",
     duration: "1.5 hours",
@@ -292,40 +314,50 @@ export const sampleSuggestedActivities = [
     specific_interest_tags: ["catan"],
     broader_interest_tags: ["board games", "strategy games"],
     reason:
-      "You talked about wanting a slow Thursday Catan round again — this is exactly that.",
+      "You talked about missing your Munich Thursday Catan routine — this is that, here.",
   },
   {
-    title: "Casual strategy evening",
+    title: "Saturday film photo walk",
     description:
-      "Ticket to Ride or a similar light strategy game, one round, English.",
-    day: "Tuesday",
-    time: "19:00",
-    duration: "1 hr 30 min",
-    location_area: "Near EUR campus",
-    exact_venue: "Kralingen Game Café",
+      "Slow walk through Kralingse Bos with cameras, quiet company welcome.",
+    day: "Saturday",
+    time: "16:00",
+    duration: "2 hours",
+    location_area: "Kralingen",
+    exact_venue: "Kralingse Plas, west entrance",
     group_size_target: 4,
     language: "English",
     energy_level: "Relaxed",
-    specific_interest_tags: ["ticket to ride"],
-    broader_interest_tags: ["board games", "strategy games"],
+    specific_interest_tags: ["film photography"],
+    broader_interest_tags: ["photography", "walks"],
     reason:
-      "You mentioned Ticket to Ride and casual strategy nights — same vibe, different night.",
+      "You mentioned golden-hour walks and not minding silence — same energy.",
   },
   {
-    title: "Quiet game night",
+    title: "Cook ramen together",
     description:
-      "Smaller, slower evening — one shorter game and a coffee, no pressure.",
-    day: "Wednesday",
-    time: "19:30",
-    duration: "1 hr 15 min",
+      "Shop together, cook from scratch in a Kralingen kitchen, eat.",
+    day: "Saturday",
+    time: "14:00",
+    duration: "3 hours",
     location_area: "Kralingen",
-    exact_venue: "Heilige Boontjes",
+    exact_venue: "Host flat near campus",
     group_size_target: 4,
     language: "English",
-    energy_level: "Low-pressure / structured",
-    specific_interest_tags: ["board games"],
-    broader_interest_tags: ["casual games", "coffee"],
+    energy_level: "Creative",
+    specific_interest_tags: ["cooking", "ramen"],
+    broader_interest_tags: ["asian food", "food"],
     reason:
-      "Same low-key shape as Thursday, in case the week needs flexibility.",
+      "You said cooking alone feels silly and you want to do it with people once.",
   },
 ];
+
+// Profile hints embedded in the sample transcript — pre-fill the gap-filler
+// when the user taps "Use sample recording" so voice-first onboarding skips
+// languages, availability, and commitment questions.
+export const sampleVoiceSignupHints = {
+  languages_spoken: ["English", "German", "Dutch"],
+  languages_comfortable: ["English", "German"],
+  availability: ["thursday-evening", "weekday-evenings", "flexible"],
+  commitment: "maybe-weekly",
+} as const;

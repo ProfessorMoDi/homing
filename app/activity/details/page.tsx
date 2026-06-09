@@ -5,10 +5,7 @@ import { Clock, MapPin, Users, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, Avatar, Pill, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
-import { findUser } from "@/lib/data";
 import { formatDayTime, formatDuration } from "@/lib/formatActivity";
-
-const PARTICIPANTS = ["u_franz", "u_lena", "u_sophie"];
 
 function buildWhyLine(tags: string[]): string {
   const top = tags.filter(Boolean).slice(0, 3);
@@ -25,10 +22,10 @@ function buildWhyLine(tags: string[]): string {
 }
 
 export default function ActivityDetails() {
-  const { state } = useApp();
+  const { state, acceptedInvitees } = useApp();
   const router = useRouter();
   const a = state.activity;
-  const participants = ["You", ...PARTICIPANTS.map((id) => findUser(id)?.first_name || "—")];
+  const participants = ["You", ...acceptedInvitees.map((u) => u.first_name)];
   const allTags = [...a.specific_interest_tags, ...a.broader_interest_tags];
   const whyLine = buildWhyLine(allTags);
   const summaryLine = a.description || a.note || a.title;

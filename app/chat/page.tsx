@@ -48,7 +48,7 @@ const INITIAL: ChatMessage[] = [
 
 export default function Chat() {
   const router = useRouter();
-  const { state } = useApp();
+  const { state, acceptedInvitees } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
   const [draft, setDraft] = useState(() => buildDraft(state.activity));
   const [draftOpen, setDraftOpen] = useState(true);
@@ -69,31 +69,34 @@ export default function Chat() {
     setDraftOpen(false);
     setInput("");
     const day = state.activity.day?.trim();
-    const franzReply = day
+    // Replies come from the people the graph match actually surfaced, so the
+    // chat reflects the same group as the details and finding screens.
+    const firstReplier = acceptedInvitees[0]?.first_name;
+    const secondReplier = acceptedInvitees[1]?.first_name;
+    const firstReply = day
       ? `Yes! ${day} works for me. Looking forward to it.`
       : "Yes! Sounds good. Looking forward to it.";
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: "m_f",
-          sender: "Franz",
-          content: franzReply,
-          ts: "now",
-        },
-      ]);
-    }, 1100);
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: "m_l",
-          sender: "Lena",
-          content: "Same here. See you all then.",
-          ts: "now",
-        },
-      ]);
-    }, 2200);
+    if (firstReplier) {
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          { id: "m_r1", sender: firstReplier, content: firstReply, ts: "now" },
+        ]);
+      }, 1100);
+    }
+    if (secondReplier) {
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          {
+            id: "m_r2",
+            sender: secondReplier,
+            content: "Same here. See you all then.",
+            ts: "now",
+          },
+        ]);
+      }, 2200);
+    }
   }
 
   return (

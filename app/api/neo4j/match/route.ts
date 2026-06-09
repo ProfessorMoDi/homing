@@ -25,8 +25,9 @@ export const maxDuration = 15;
 
 const MATCH_QUERY = `
 MATCH (a:Activity {id: $activityId})-[req:REQUIRES]->(t:Topic)
-MATCH (t)-[rel:RELATED_TO*0..1]-(t2:Topic)<-[:LIKES]-(u:User)
+MATCH (t)-[rel:RELATED_TO*0..1]-(t2:Topic)<-[l:LIKES]-(u:User)
 WHERE u.id <> $creatorId
+  AND coalesce(l.weight, 1) > 0
   AND NOT (u)-[:AVOID]->(:User {id: $creatorId})
   AND NOT (:User {id: $creatorId})-[:AVOID]->(u)
   AND NOT EXISTS {

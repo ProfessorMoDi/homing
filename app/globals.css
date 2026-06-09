@@ -727,6 +727,82 @@
 }
 .dev-panel__action:hover { background: var(--color-cream-warm); color: var(--color-ink); }
 
+.dev-detail__parity {
+  font-size: 0.78rem;
+  color: var(--color-sage-deep);
+  background: var(--color-sage-soft);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.dev-detail__parity code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.74rem;
+}
+
+/* ── Live app state strip ── */
+.dev-livestate {
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-cream);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.dev-livestate__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+.dev-livestate__label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  color: var(--color-muted);
+}
+.dev-livestate__source {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.74rem;
+}
+.dev-livestate__source--graph { background: var(--color-sage-soft); color: var(--color-sage-deep); }
+.dev-livestate__source--mock { background: var(--color-sand); color: var(--color-sand-deep); }
+.dev-livestate__source--loading { background: var(--color-cream-warm); color: var(--color-ink-soft); }
+.dev-livestate__note { margin-left: auto; font-size: 0.72rem; color: var(--color-sage-deep); }
+.dev-livestate__matches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.dev-livestate__match {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+.dev-livestate__match-name { font-weight: 600; color: var(--color-ink); min-width: 4rem; }
+.dev-livestate__match-score {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--color-sage-deep);
+  font-weight: 600;
+}
+.dev-livestate__match-reason {
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dev-livestate__hint { font-size: 0.76rem; color: var(--color-muted); }
+.dev-livestate__hint code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+}
+
 .dev-panel__body {
   display: grid;
   grid-template-columns: 280px 1fr;

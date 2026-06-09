@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AppShell, StepDots } from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
 import { Label, PrimaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 
@@ -29,15 +29,14 @@ export default function SignUp() {
       setShowAgeWarn(true);
       return;
     }
-    router.push("/signup/details");
+    router.push("/voice");
   }
 
   return (
     <AppShell back="/" title="Create your account">
       <div className="mb-5">
-        <StepDots total={2} current={0} />
-        <p className="text-[12px] text-[var(--color-muted)] text-center mt-2">
-          Step 1 of 2 · the basics
+        <p className="text-[12px] text-[var(--color-muted)] text-center">
+          The basics · then a two-minute voice prompt
         </p>
       </div>
 
@@ -102,10 +101,11 @@ export default function SignUp() {
       </div>
 
       <PrimaryButton onClick={onContinue} disabled={!canContinue}>
-        Continue
+        Continue to voice onboarding
       </PrimaryButton>
       <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
-        A few details next, then a two-minute voice prompt.
+        Next, tell Homi about yourself out loud — we&apos;ll fill in your
+        profile from what you say.
       </p>
     </AppShell>
   );

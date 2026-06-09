@@ -36,9 +36,13 @@ export function isDevModeEnabled(): boolean {
       const v = params.get(URL_PARAM);
       if (v === "0" || v === "false") {
         localStorage.removeItem(ENABLED_KEY);
+        localStorage.removeItem(OPEN_KEY);
         return false;
       }
+      // ?dev=1 is the presentation entry point: enable dev mode AND open the
+      // split-screen panel so the very first screen is demo-ready.
       localStorage.setItem(ENABLED_KEY, "1");
+      localStorage.setItem(OPEN_KEY, "1");
       return true;
     }
     return localStorage.getItem(ENABLED_KEY) === "1";

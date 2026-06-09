@@ -6,7 +6,6 @@ import { ShieldCheck, Angry, Frown, Meh, Smile, Laugh } from "lucide-react";
 import { AppShell, StepDots } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
-import { findUser } from "@/lib/data";
 
 const RATINGS = [
   { value: 1, Icon: Angry, label: "Not my thing" },
@@ -16,8 +15,6 @@ const RATINGS = [
   { value: 5, Icon: Laugh, label: "I'd absolutely do this again" },
 ] as const;
 
-const PEOPLE = ["u_franz", "u_lena", "u_sophie"];
-
 const PEOPLE_OPTIONS = [
   ["again", "Yes, invite us together again"],
   ["neutral", "Neutral / no preference"],
@@ -26,7 +23,7 @@ const PEOPLE_OPTIONS = [
 
 export default function Feedback() {
   const router = useRouter();
-  const { state, setFeedback, submitFeedback } = useApp();
+  const { state, setFeedback, submitFeedback, acceptedInvitees } = useApp();
   const [step, setStep] = useState(0);
   const [rating, setRating] = useState<number | undefined>(
     state.feedback.activityRating,
@@ -150,13 +147,13 @@ export default function Feedback() {
             </p>
           </Card>
           <div className="grid gap-3 mb-5">
-            {PEOPLE.map((id) => {
-              const u = findUser(id);
+            {acceptedInvitees.map((u) => {
+              const id = u.id;
               const current = peopleFb[id];
               return (
                 <Card key={id}>
                   <p className="text-[14.5px] font-medium mb-2">
-                    {u?.first_name}
+                    {u.first_name}
                   </p>
                   <div className="grid gap-1.5">
                     {PEOPLE_OPTIONS.map(([k, label]) => (

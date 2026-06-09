@@ -39,6 +39,13 @@ Return a strict JSON object with exactly these fields.
 
 4) activity_types — 2–4 short style descriptors (e.g. "sit-down", "creative", "low-pressure first meeting", "outdoors", "structured", "games", "language exchange").
 
+5b) availability — array of zero or more tokens, chosen ONLY from this exact set, describing when the speaker said they are usually free:
+   "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible".
+   Map naturally: "weekends" → "every-weekend"; "Thursday evenings" → "thursday-evening" (and also "weekday-evenings"); "Friday mornings/afternoons" → "friday-morning"; "I'm pretty flexible / anytime" → "flexible". Include only tokens clearly supported by what they said. If nothing is stated, return [].
+
+5c) commitment — a single token, chosen ONLY from this exact set, capturing how much they want to commit:
+   "try-once" (just see how it feels / one time), "maybe-weekly" (maybe make it weekly), "regular-thing" (wants a regular/ongoing thing), "open-ended" (no fixed cadence). If unclear, return "".
+
 5) activities — 3 concrete activity suggestions grounded in what they actually said. Each suggestion is an object:
    - title: action-oriented phrase, 2–6 words (e.g. "Start a Catan round", "Casual photo walk", "Cook a new dish together")
    - description: one short sentence about what would happen
@@ -99,7 +106,38 @@ interface Analysis {
   minor_interests: string[];
   languages: string[];
   activity_types: string[];
+  availability: string[];
+  commitment: string;
   activities: SuggestedActivity[];
+}
+
+const AVAILABILITY_TOKENS = new Set([
+  "every-weekend",
+  "weekday-evenings",
+  "thursday-evening",
+  "friday-morning",
+  "flexible",
+]);
+const COMMITMENT_TOKENS = new Set([
+  "try-once",
+  "maybe-weekly",
+  "regular-thing",
+  "open-ended",
+]);
+
+function tokenList(v: unknown, allowed: Set<string>, max: number): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  for (const x of v as unknown[]) {
+    const tok = String(x).toLowerCase().trim();
+    if (allowed.has(tok)) seen.add(tok);
+  }
+  return Array.from(seen).slice(0, max);
+}
+
+function oneToken(v: unknown, allowed: Set<string>): string {
+  const tok = String(v ?? "").toLowerCase().trim();
+  return allowed.has(tok) ? tok : "";
 }
 
 function strList(v: unknown, max: number): string[] {
@@ -144,6 +182,8 @@ function coerce(raw: unknown): Analysis {
   const minor = strList(r.minor_interests, 5);
   const langs = strList(r.languages, 6);
   const types = strList(r.activity_types, 4);
+  const availability = tokenList(r.availability, AVAILABILITY_TOKENS, 5);
+  const commitment = oneToken(r.commitment, COMMITMENT_TOKENS);
   const activities = Array.isArray(r.activities)
     ? (r.activities as Record<string, unknown>[])
         .filter((a) => typeof a?.title === "string")
@@ -190,6 +230,8 @@ function coerce(raw: unknown): Analysis {
     minor_interests: minor,
     languages: langs,
     activity_types: types,
+    availability,
+    commitment,
     activities,
   };
 }

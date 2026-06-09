@@ -227,9 +227,16 @@ export async function writeVoiceProfile(
 export type InviteStatus =
   | "pending" | "accepted" | "declined" | "rescheduled" | "timed_out";
 
+export interface InviteWriteEntry {
+  user_id: string;
+  match_score?: number;
+  match_reasons?: string[];
+}
+
 export interface WriteInvitesPayload {
   activity_id: string;
-  invited_user_ids: string[];
+  invited_user_ids?: string[];
+  invites?: InviteWriteEntry[];
   demo?: boolean;
 }
 
@@ -238,14 +245,28 @@ export async function writeInvites(
   p: WriteInvitesPayload,
 ): Promise<{ written: number }> {
   const now = new Date().toISOString();
+  const entries: InviteWriteEntry[] =
+    p.invites ??
+    (p.invited_user_ids ?? []).map((user_id) => ({ user_id }));
+
   let written = 0;
-  for (const userId of p.invited_user_ids) {
+  for (const entry of entries) {
+    const score = entry.match_score ?? 0;
+    const reasons = entry.match_reasons ?? [];
     await tx.run(
       `MATCH (a:Activity {id: $aid}), (u:User {id: $uid})
        MERGE (a)-[r:INVITED]->(u)
-         ON CREATE SET r.status = 'pending', r.invited_at = $now${p.demo ? ", r.demo = true" : ""}
-         ON MATCH  SET r.invited_at = coalesce(r.invited_at, $now)`,
-      { aid: p.activity_id, uid: userId, now },
+         ON CREATE SET r.status = 'pending', r.invited_at = $now,
+           r.match_score = $score, r.match_reasons = $reasons${p.demo ? ", r.demo = true" : ""}
+         ON MATCH  SET r.invited_at = coalesce(r.invited_at, $now),
+           r.match_score = $score, r.match_reasons = $reasons`,
+      {
+        aid: p.activity_id,
+        uid: entry.user_id,
+        now,
+        score,
+        reasons,
+      },
     );
     written++;
   }

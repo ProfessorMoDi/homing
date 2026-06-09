@@ -16,9 +16,18 @@ export const maxDuration = 15;
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as WriteInvitesPayload | null;
-  if (!body?.activity_id || !Array.isArray(body.invited_user_ids)) {
+  if (!body?.activity_id) {
     return NextResponse.json(
-      { error: "activity_id and invited_user_ids required" },
+      { error: "activity_id required" },
+      { status: 400 },
+    );
+  }
+  const hasIds =
+    Array.isArray(body.invited_user_ids) && body.invited_user_ids.length > 0;
+  const hasInvites = Array.isArray(body.invites) && body.invites.length > 0;
+  if (!hasIds && !hasInvites) {
+    return NextResponse.json(
+      { error: "activity_id and invited_user_ids or invites required" },
       { status: 400 },
     );
   }

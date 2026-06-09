@@ -118,10 +118,10 @@ export const STAGES: Stage[] = [
     id: "match",
     name: "Match",
     short: "Graph → candidates",
-    what: "The weighted match query traverses the activity's REQUIRES edges, expands them by 1 hop along RELATED_TO, intersects with user :LIKES, and computes a six-axis score per candidate. The graph paths that won are returned as human reasons.",
+    what: "The weighted match query traverses the activity's REQUIRES edges, expands them by 1 hop along RELATED_TO, intersects with user :LIKES (weight > 0 — hidden topics excluded), and computes a six-axis score per candidate. The same response drives /activity/finding and simulateInvites; the dev panel shows the identical breakdown.",
     steps: [
-      "POST /api/neo4j/match with { activityId, creatorId }.",
-      "Cypher: MATCH (a)-[:REQUIRES]->(t)-[:RELATED_TO*0..1]-(t2)<-[:LIKES]-(u). Direct hit gets weight 1.0; 1-hop hit gets the edge's weight (0.6 broader / 0.5 sibling / 0.3 adjacent).",
+      "POST /api/neo4j/match with { activityId, creatorId } — awaited in persistAndMatch(), not fire-and-forget.",
+      "Cypher: MATCH (a)-[:REQUIRES]->(t)-[:RELATED_TO*0..1]-(t2)<-[l:LIKES]-(u) WHERE coalesce(l.weight,1) > 0. Direct hit gets weight 1.0; 1-hop hit gets the edge's weight (0.6 broader / 0.5 sibling / 0.3 adjacent).",
       "Per (user, requirement) we take max(weight) so direct + indirect matches don't double-count.",
       "Sum: specific × 50 + broader × 30, each scaled by weight. Then add availability / language / commitment / location / preference bonuses.",
       "AVOID edges and DISLIKES of any required specific topic exclude candidates entirely.",
