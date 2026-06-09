@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
+import { isCollect } from "@/lib/appMode";
 import {
   clearCached,
   getCached,
@@ -31,11 +32,16 @@ export default function Themes() {
   const [regen, setRegen] = useState<RegenStatus>("idle");
   const [retryTick, setRetryTick] = useState(0);
 
+  // The collect build ends after the profile — it never shows activity
+  // suggestions — so it must not wait on (or fire) the /api/suggest call.
+  const collect = isCollect();
+
   // Forward progress is gated on *having* suggestions, not on the refresh
   // finishing. analyze (or the pre-seeded cache) already populated the cards,
   // so the user can move on while a refresh is still in flight; "ready" and
   // "error" both leave something usable on /suggestions.
   const canContinue =
+    collect ||
     state.suggestedActivities.length > 0 ||
     regen === "ready" ||
     regen === "error";
@@ -53,6 +59,9 @@ export default function Themes() {
   // module's inflight dedup keeps the network call to one even though the
   // effect runs twice under Strict Mode.
   useEffect(() => {
+    // Collect build never surfaces suggestions — don't spend an LLM call.
+    if (collect) return;
+
     const visibleTopics = state.topics
       .filter((t) => !t.hidden)
       .map((t) => ({
@@ -125,6 +134,7 @@ export default function Themes() {
     state.minorInterests,
     setSuggestedActivities,
     retryTick,
+    collect,
   ]);
 
   const onRetry = useCallback(() => {
@@ -234,7 +244,7 @@ export default function Themes() {
 
       <div className="divider" />
 
-      <RegenBadge status={regen} onRetry={onRetry} />
+      {!collect && <RegenBadge status={regen} onRetry={onRetry} />}
 
       <PrimaryButton
         onClick={() => router.push("/signup/details")}

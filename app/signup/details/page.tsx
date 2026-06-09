@@ -215,6 +215,7 @@ export default function SignUpDetails() {
   // user lands on the "you're in the flock" screen. The full build continues
   // into the activity-suggestion flow.
   const nextAfterProfile = isCollect() ? "/collect/done" : "/suggestions";
+  const finishLabel = isCollect() ? "Join the flock" : "See your activities";
 
   function finish() {
     commitSignup();
@@ -302,7 +303,7 @@ export default function SignUpDetails() {
 
         <PrimaryButton onClick={finish}>
           <span className="inline-flex items-center justify-center gap-1.5">
-            See your activities
+            {finishLabel}
             <ArrowRight size={16} />
           </span>
         </PrimaryButton>
@@ -460,7 +461,7 @@ export default function SignUpDetails() {
         <div className="mt-7">
           <PrimaryButton onClick={onContinue}>
             <span className="inline-flex items-center justify-center gap-1.5">
-              {idx === total - 1 ? "See your activities" : "Continue"}
+              {idx === total - 1 ? finishLabel : "Continue"}
               <ArrowRight size={16} />
             </span>
           </PrimaryButton>

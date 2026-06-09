@@ -84,8 +84,7 @@ export default function CollectDone() {
       </div>
 
       <p className="text-[12px] text-[var(--color-muted)] text-center mt-5 leading-relaxed">
-        Your voice recording never left your device. Only the interests you
-        confirmed are stored.
+        We never store your recording — only the interests you confirmed.
       </p>
     </AppShell>
   );

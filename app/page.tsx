@@ -110,14 +110,14 @@ export default function Landing() {
           ) : (
             <>
               <Link href="/signup" className="w-full">
-                <PrimaryButton>Start with EUR email</PrimaryButton>
+                <PrimaryButton>Get started</PrimaryButton>
               </Link>
               <Link href="/how-it-works" className="w-full">
                 <SecondaryButton>How HOMING works</SecondaryButton>
               </Link>
               <PrivacyNote>
-                Voice is transcribed on your phone. The recording never leaves
-                your device.
+                We turn your voice into interests, then discard the audio. No
+                password — we email you a one-tap sign-in link.
               </PrivacyNote>
               {mode === "full" && (
                 <div className="text-center mt-1">
