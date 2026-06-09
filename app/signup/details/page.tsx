@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
-import { isCollect } from "@/lib/appMode";
+import { isCollect, isFull } from "@/lib/appMode";
 
 const GENDER = [
   ["male", "Male"],
@@ -467,12 +467,14 @@ export default function SignUpDetails() {
         </div>
       )}
 
-      <div className="mt-3">
-        <SecondaryButton onClick={useSampleDetails}>
-          <Sparkles size={15} />
-          Fill the rest with sample details
-        </SecondaryButton>
-      </div>
+      {isFull() && (
+        <div className="mt-3">
+          <SecondaryButton onClick={useSampleDetails}>
+            <Sparkles size={15} />
+            Fill the rest with sample details
+          </SecondaryButton>
+        </div>
+      )}
       <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
         You control what is used.
       </p>

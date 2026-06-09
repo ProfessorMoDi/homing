@@ -9,6 +9,7 @@ import { SkyScene } from "@/components/SkyScene";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { stashAudio } from "@/lib/audioStash";
+import { isFull } from "@/lib/appMode";
 
 function format(secs: number) {
   const m = Math.floor(secs / 60);
@@ -127,6 +128,9 @@ export default function VoiceOnboarding() {
 
   const doneEnabled = seconds >= 90;
   const skipEnabled = recording && seconds >= 1;
+  // Demo-only shortcuts (skip-90s, canned sample profile) ship only in the
+  // full demo build. The normal/collect build real users get is clean.
+  const showDemoTools = isFull();
 
   async function onStart() {
     if (recording) return;
@@ -148,9 +152,7 @@ export default function VoiceOnboarding() {
       };
       recorder.onerror = (e) => {
         console.error("MediaRecorder error", e);
-        setError(
-          "Recording hit a snag. Try again, or use the sample recording below.",
-        );
+        setError("Recording hit a snag. Please try again.");
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
       };
@@ -160,7 +162,7 @@ export default function VoiceOnboarding() {
     } catch (e) {
       console.error(e);
       setError(
-        "We couldn't access your microphone. Use the sample recording below to keep going.",
+        "We couldn't access your microphone. Check your browser permissions and try again.",
       );
     }
   }
@@ -299,38 +301,77 @@ export default function VoiceOnboarding() {
           <Square size={16} fill="currentColor" />
           Done
         </PrimaryButton>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => onDone(true)}
-          disabled={!skipEnabled}
-        >
-          <FastForward size={14} />
-          Done now (demo · skip 90s)
-        </button>
-        <SecondaryButton onClick={onSample}>
-          <Sparkles size={16} />
-          Use sample recording
-        </SecondaryButton>
+        {showDemoTools && (
+          <>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => onDone(true)}
+              disabled={!skipEnabled}
+            >
+              <FastForward size={14} />
+              Done now (demo · skip 90s)
+            </button>
+            <SecondaryButton onClick={onSample}>
+              <Sparkles size={16} />
+              Use sample recording
+            </SecondaryButton>
+          </>
+        )}
       </div>
 
-      <div className="grid gap-2 mb-2">
+      <NudgePrompt />
+
+      <div className="grid gap-2 mt-5 mb-2">
         <PrivacyNote>
-          Demo build: audio is transcribed via ElevenLabs Scribe.
+          Your voice is transcribed to text, then the audio is discarded.
         </PrivacyNote>
         <PrivacyNote>
-          Production HOMING would run this on-device so audio never leaves your
-          phone.
+          We never store the recording — only the interests you confirm.
         </PrivacyNote>
       </div>
-
-      <details className="mt-4 text-[13px] text-[var(--color-muted)]">
-        <summary className="cursor-pointer">Need a nudge?</summary>
-        <p className="mt-2 leading-relaxed">
-          Mention hobbies, games, music, sports, food, places, projects,
-          languages, routines, or anything you would actually enjoy doing.
-        </p>
-      </details>
     </AppShell>
+  );
+}
+
+// The "need a nudge?" helper. Open by default and visually prominent — first-
+// time users often freeze at the mic, so the prompt ideas sit right there
+// instead of hiding behind a small toggle.
+const NUDGE_IDEAS = [
+  ["🎲", "What you've been into", "Board games, a sport, a show you binged, a game you keep replaying"],
+  ["🎧", "What you make or create", "Music, photos, cooking, building things, writing"],
+  ["🌧️", "Your Rotterdam", "Cafés, walks, neighbourhoods, spots you love or want to explore"],
+  ["🗓️", "Your rhythm", "When you're free, how often you'd meet, languages you're comfortable in"],
+] as const;
+
+function NudgePrompt() {
+  return (
+    <div className="card-outline p-4 mt-2">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="grid place-items-center h-7 w-7 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+          <Sparkles size={14} />
+        </span>
+        <p className="text-[14px] font-medium text-[var(--color-ink)]">
+          Not sure what to say? Talk about…
+        </p>
+      </div>
+      <div className="grid gap-2.5">
+        {NUDGE_IDEAS.map(([emoji, title, hint]) => (
+          <div key={title} className="flex items-start gap-2.5">
+            <span className="text-[15px] leading-none mt-0.5 shrink-0" aria-hidden>
+              {emoji}
+            </span>
+            <p className="text-[12.5px] leading-relaxed text-[var(--color-ink-soft)]">
+              <span className="font-medium text-[var(--color-ink)]">{title}.</span>{" "}
+              {hint}.
+            </p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11.5px] text-[var(--color-muted)] mt-3 leading-relaxed">
+        No script needed — just talk. Pauses are okay; silence is part of how
+        you speak.
+      </p>
+    </div>
   );
 }

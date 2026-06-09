@@ -258,7 +258,7 @@ function Transcribing() {
     } catch (e) {
       console.error("Transcribe failed", e);
       setErrMsg(
-        "We couldn't reach the transcription service. Use the sample recording to keep going.",
+        "We couldn't reach the transcription service. Please go back and try recording again.",
       );
       setStage(4);
       return;
@@ -527,9 +527,9 @@ function Transcribing() {
             <div className="text-[13px] text-[var(--color-ink-soft)] leading-relaxed">
               {isLive ? (
                 <>
-                  Demo build · audio is routed to ElevenLabs Scribe and themes
-                  are analyzed by Ollama. A production HOMING runs both
-                  on-device.
+                  Your audio is transcribed by ElevenLabs Scribe and your themes
+                  are analysed by Ollama, then the audio is discarded. We keep
+                  only the interests you confirm.
                 </>
               ) : (
                 <>
