@@ -1,37 +1,28 @@
-// App-mode is the single switch that turns one codebase into three distinct
-// products. It is read from NEXT_PUBLIC_APP_MODE at build time so each Vercel
-// deployment can be a different mode while sharing one Neo4j database:
+// App-mode turns one codebase into three products that share one Neo4j graph.
+// The build-time default comes from NEXT_PUBLIC_APP_MODE; demo is a runtime
+// session that can be entered from any build.
 //
-//   • "full"    — the complete hackathon demo flow (signup → voice → themes →
-//                 suggestions → match → verify → chat → feedback → group).
-//                 This is the default; nothing changes for the existing demo.
+//   • "collect" — the data-collection build you send to friends. Truncated flow
+//                 (signup → voice → interests → "you're in"). Writes REAL users
+//                 into the shared graph. Set NEXT_PUBLIC_APP_MODE=collect.
 //
-//   • "collect" — the data-collection build. The link you send to friends.
-//                 Truncates the flow at signup → voice → interests, then stops
-//                 on a "you're in" screen. Writes REAL (non-demo) users, voice
-//                 profiles, and LIKES edges into the shared graph so the
-//                 network fills up with real people.
+//   • "demo"    — the FULL workflow as a throwaway: voice → themes →
+//                 suggestions → matching → verify → chat → feedback → group,
+//                 exactly like the real product, except nothing is written to
+//                 the graph (every Neo4j write is a no-op — see lib/neo4jClient).
+//                 Entered via /demo; persists for the browser tab (sessionStorage)
+//                 so the whole flow stays in demo until you exit.
 //
-//   • "demo"    — the read-only showcase. Lives entirely under the /demo path.
-//                 Connects to whatever network the collect build has
-//                 accumulated and finds connections in a throwaway session.
-//                 Writes NOTHING — every Neo4j write is a no-op (see
-//                 lib/neo4jClient.ts) and matching runs against the live graph
-//                 via the read-only /api/neo4j/match-live route.
+//   • "full"    — the same complete flow as demo but WITH writes. The default
+//                 for local dev / the original hackathon demo.
 //
-// Single deployment, path-driven: the whole site runs the env default (set
-// NEXT_PUBLIC_APP_MODE=collect for the build you send to friends), and visiting
-// /demo flips into the read-only showcase for that page. So "normal site =
-// collect, /demo = demo" from one Vercel project sharing one graph.
-//
-// Local override: append ?mode=collect|full to any URL to force that mode on
-// the client (persisted in localStorage, mirrors lib/devMode.tsx) so one dev
-// server can exercise every build. Server-side code always sees the env
-// default — only the client honours the path/override.
+// Precedence (client): ?mode= override > active demo session > stored override
+// > env default. Server-side always sees the env default.
 
 export type AppMode = "full" | "collect" | "demo";
 
-const STORAGE_KEY = "homing-app-mode";
+const STORAGE_KEY = "homing-app-mode"; // persisted collect|full override (localStorage)
+const DEMO_SESSION_KEY = "homing-demo-session"; // active demo run (sessionStorage)
 const URL_PARAM = "mode";
 
 function normalize(v: string | null | undefined): AppMode | null {
@@ -40,39 +31,50 @@ function normalize(v: string | null | undefined): AppMode | null {
 }
 
 // The build-time default baked in from the environment. Falls back to "full"
-// so an unconfigured deployment behaves exactly like the original demo.
+// so an unconfigured deployment behaves like the original demo.
 export const ENV_APP_MODE: AppMode =
   normalize(process.env.NEXT_PUBLIC_APP_MODE) ?? "full";
 
-// Path prefixes that are always the read-only demo, regardless of env. The
-// showcase lives under /demo so "the normal site" and "/demo" can coexist in
-// one deployment.
-const DEMO_PATHS = ["/demo"];
-
-function isDemoPath(pathname: string): boolean {
-  return DEMO_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+function demoSessionActive(): boolean {
+  try {
+    return window.sessionStorage.getItem(DEMO_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
-// Resolve the active mode (client-side). Precedence:
-//   1. /demo path  → demo (never persisted; purely scoped to that page)
-//   2. ?mode= param → collect|full override for local testing (persisted)
-//   3. stored override from a previous ?mode=
-//   4. env default (NEXT_PUBLIC_APP_MODE)
+// Start a throwaway demo run. Persists for the tab so every screen of the flow
+// stays in demo (and therefore never writes to the graph).
+export function enterDemoSession(): void {
+  try {
+    window.sessionStorage.setItem(DEMO_SESSION_KEY, "1");
+  } catch {}
+}
+
+export function exitDemoSession(): void {
+  try {
+    window.sessionStorage.removeItem(DEMO_SESSION_KEY);
+  } catch {}
+}
+
 export function appMode(): AppMode {
   if (typeof window === "undefined") return ENV_APP_MODE;
   try {
-    if (isDemoPath(window.location.pathname)) return "demo";
-
     const param = normalize(
       new URLSearchParams(window.location.search).get(URL_PARAM),
     );
-    // Only persist non-demo overrides — demo is path-scoped, so a stale stored
-    // "demo" must never bleed into the collect flow.
-    if (param && param !== "demo") {
-      localStorage.setItem(STORAGE_KEY, param);
+    if (param === "demo") {
+      enterDemoSession();
+      return "demo";
+    }
+    if (param) {
+      // Explicit collect|full override — persist and leave any demo session.
+      window.localStorage.setItem(STORAGE_KEY, param);
+      exitDemoSession();
       return param;
     }
-    const stored = normalize(localStorage.getItem(STORAGE_KEY));
+    if (demoSessionActive()) return "demo";
+    const stored = normalize(window.localStorage.getItem(STORAGE_KEY));
     if (stored && stored !== "demo") return stored;
   } catch {}
   return ENV_APP_MODE;
@@ -86,6 +88,13 @@ export function isCollect(): boolean {
 }
 export function isDemo(): boolean {
   return appMode() === "demo";
+}
+
+// True for the builds that run the complete product flow (full + demo) — i.e.
+// everything except the truncated collect build. Use this for flow branching
+// (show suggestions, the matching/activity screens, the skip shortcuts).
+export function runsFullFlow(): boolean {
+  return appMode() !== "collect";
 }
 
 // Demo is the only mode that must never mutate the shared graph.

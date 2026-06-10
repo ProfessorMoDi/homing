@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef } from "react";
 import { useDevMode } from "../lib/devMode";
 import { describeRequest, devBus } from "../lib/devBus";
+import { DemoBanner } from "./DemoBanner";
 
 // DevPanel is dynamic-imported with SSR disabled so it never lands in the
 // shared bundle for users who don't enable dev mode.
@@ -40,7 +41,14 @@ export function DevShell({ children, fullBleed }: Props) {
   // Full-bleed routes (e.g. /theory) bypass the frame entirely. Even with
   // dev panel open we leave them alone — the panel can still render
   // alongside, but the page itself controls its own layout.
-  const content = fullBleed ? <>{children}</> : <div className="frame">{children}</div>;
+  const content = fullBleed ? (
+    <>{children}</>
+  ) : (
+    <div className="frame">
+      <DemoBanner />
+      {children}
+    </div>
+  );
 
   if (!enabled) return content;
 

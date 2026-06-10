@@ -9,7 +9,7 @@ import { SkyScene } from "@/components/SkyScene";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { stashAudio } from "@/lib/audioStash";
-import { isFull } from "@/lib/appMode";
+import { useAppMode } from "@/lib/useAppMode";
 
 function format(secs: number) {
   const m = Math.floor(secs / 60);
@@ -128,9 +128,9 @@ export default function VoiceOnboarding() {
 
   const doneEnabled = seconds >= 90;
   const skipEnabled = recording && seconds >= 1;
-  // Demo-only shortcuts (skip-90s, canned sample profile) ship only in the
-  // full demo build. The normal/collect build real users get is clean.
-  const showDemoTools = isFull();
+  // Skip-90s and the canned sample profile are flow shortcuts for the demo /
+  // full builds. The normal/collect build real users get is clean.
+  const showDemoTools = useAppMode() !== "collect";
 
   async function onStart() {
     if (recording) return;

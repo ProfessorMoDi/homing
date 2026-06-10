@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
-import { isCollect, isFull } from "@/lib/appMode";
+import { useAppMode } from "@/lib/useAppMode";
 
 const GENDER = [
   ["male", "Male"],
@@ -155,13 +155,14 @@ function isDone(key: FieldKey, s: Signup): boolean {
     case "languages_spoken":
       return (
         s.languages_spoken.length > 0 &&
-        (!s.languages_spoken.includes("Other") || s.language_other.trim().length > 0)
+        (!s.languages_spoken.includes("Other") ||
+          (s.language_other ?? "").trim().length > 0)
       );
     case "languages_comfortable":
       return (
         s.languages_comfortable.length > 0 &&
         (!s.languages_comfortable.includes("Other") ||
-          s.language_other.trim().length > 0)
+          (s.language_other ?? "").trim().length > 0)
       );
     case "availability":
       return s.availability.length > 0;
@@ -214,8 +215,9 @@ export default function SignUpDetails() {
   // The collect build ends here: profile is committed to the graph and the
   // user lands on the "you're in the flock" screen. The full build continues
   // into the activity-suggestion flow.
-  const nextAfterProfile = isCollect() ? "/collect/done" : "/suggestions";
-  const finishLabel = isCollect() ? "Join the flock" : "See your activities";
+  const mode = useAppMode();
+  const nextAfterProfile = mode === "collect" ? "/collect/done" : "/suggestions";
+  const finishLabel = mode === "collect" ? "Join the flock" : "See your activities";
 
   function finish() {
     commitSignup();
@@ -468,7 +470,7 @@ export default function SignUpDetails() {
         </div>
       )}
 
-      {isFull() && (
+      {mode !== "collect" && (
         <div className="mt-3">
           <SecondaryButton onClick={useSampleDetails}>
             <Sparkles size={15} />

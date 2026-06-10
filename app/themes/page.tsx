@@ -8,7 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
-import { isCollect } from "@/lib/appMode";
+import { useAppMode } from "@/lib/useAppMode";
 import {
   clearCached,
   getCached,
@@ -34,7 +34,7 @@ export default function Themes() {
 
   // The collect build ends after the profile — it never shows activity
   // suggestions — so it must not wait on (or fire) the /api/suggest call.
-  const collect = isCollect();
+  const collect = useAppMode() === "collect";
 
   // Forward progress is gated on *having* suggestions, not on the refresh
   // finishing. analyze (or the pre-seeded cache) already populated the cards,

@@ -142,16 +142,12 @@ export default function Finding() {
         </div>
         {matchLoading ? (
           <p className="text-[12px] text-[var(--color-muted)] mt-2 inline-flex items-center gap-1.5">
-            Querying the interest graph <ThinkingDots size="small" />
-          </p>
-        ) : graphMatch ? (
-          <p className="text-[12px] text-[var(--color-sage-deep)] mt-2">
-            Ranked from Neo4j — same list as the dev panel match view
-            {topMatches[0]?.reasons[0] ? ` · top: ${topMatches[0].reasons[0]}` : ""}.
+            Finding people who fit <ThinkingDots size="small" />
           </p>
         ) : (
-          <p className="text-[12px] text-[var(--color-muted)] mt-2">
-            Graph unavailable — showing local fallback ranking.
+          <p className="text-[12px] text-[var(--color-sage-deep)] mt-2">
+            Ranked by who fits best
+            {topMatches[0]?.reasons[0] ? ` · top: ${topMatches[0].reasons[0]}` : ""}.
           </p>
         )}
       </Card>

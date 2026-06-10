@@ -62,21 +62,21 @@ export default function Landing() {
         <p className="animate-hero-rise text-[12px] text-[var(--color-muted)] text-center mb-6 inline-flex items-center justify-center gap-1.5">
           <span className="inline-block h-1 w-1 rounded-full bg-[var(--color-sage)] animate-live-pulse" />
           {mode === "demo"
-            ? "A live, read-only peek into the HOMING flock."
+            ? "A full run-through — nothing you do is saved."
             : "Meet Homi — the pigeon who quietly carries the messages."}
         </p>
 
         <h1 className="animate-hero-rise delay-1 display text-[34px] leading-[1.05] text-center px-2">
           {mode === "demo"
-            ? "Find out who you're secretly in sync with."
+            ? "See the whole HOMING flow."
             : "Turn what you like into a small real-life activity."}
         </h1>
 
         <p className="animate-hero-rise delay-2 text-[15px] leading-relaxed text-[var(--color-ink-soft)] text-center mt-4 px-2">
           {mode === "demo" ? (
             <>
-              Pick what you&apos;re into and Homi ranks the people already in the
-              network you&apos;d click with — and exactly how much.
+              Record your voice, get matched, and follow the entire experience —
+              this is a demo, so nothing you do is saved.
             </>
           ) : mode === "collect" ? (
             <>
@@ -94,17 +94,17 @@ export default function Landing() {
         <div className="animate-hero-rise delay-3 mt-auto pt-10 grid gap-3">
           {mode === "demo" ? (
             <>
-              <Link href="/demo" className="w-full">
+              <Link href="/voice" className="w-full">
                 <PrimaryButton>
                   <span className="inline-flex items-center justify-center gap-1.5">
                     <Sparkles size={16} />
-                    See who you&apos;d click with
+                    Start the demo
                   </span>
                 </PrimaryButton>
               </Link>
               <PrivacyNote>
-                A throwaway session. Nothing you do here is saved to anyone&apos;s
-                profile.
+                A throwaway session. Nothing you do here is written to the
+                network.
               </PrivacyNote>
             </>
           ) : (
