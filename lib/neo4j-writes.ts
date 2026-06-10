@@ -81,7 +81,8 @@ export async function patchUser(
     );
     for (const slot of patch.availability) {
       await tx.run(
-        `MATCH (u:User {id: $uid}), (ts:TimeSlot {id: $tsId})
+        `MATCH (u:User {id: $uid})
+         MERGE (ts:TimeSlot {id: $tsId})
          MERGE (u)-[:AVAILABLE_AT]->(ts)`,
         { uid: patch.id, tsId: slot },
       );
@@ -95,14 +96,16 @@ export async function patchUser(
     );
     for (const lang of patch.languages_spoken ?? []) {
       await tx.run(
-        `MATCH (u:User {id: $uid}), (l:Language {id: $lid})
+        `MATCH (u:User {id: $uid})
+         MERGE (l:Language {id: $lid})
          MERGE (u)-[:SPEAKS]->(l)`,
         { uid: patch.id, lid: lang.toLowerCase() },
       );
     }
     for (const lang of patch.languages_comfortable ?? []) {
       await tx.run(
-        `MATCH (u:User {id: $uid}), (l:Language {id: $lid})
+        `MATCH (u:User {id: $uid})
+         MERGE (l:Language {id: $lid})
          MERGE (u)-[:COMFORTABLE_IN]->(l)`,
         { uid: patch.id, lid: lang.toLowerCase() },
       );
@@ -162,7 +165,7 @@ export async function writeInterests(
          ON CREATE SET top.title = $title, top.tier = 'specific', top.canonical = $canonical
          ON MATCH  SET top.title = coalesce(top.title, $title)
        WITH top
-       MATCH (u:User {id: $userId})
+       MERGE (u:User {id: $userId})
        MERGE (u)-[r:LIKES]->(top)
          SET r.weight = $weight,
              r.source = $source,
@@ -206,7 +209,7 @@ export async function writeVoiceProfile(
            v.recorded_at = $now,
            v.user_id     = $userId${p.demo ? ", v.demo = true" : ""}
      WITH v
-     MATCH (u:User {id: $userId})
+     MERGE (u:User {id: $userId})
      MERGE (u)-[r:RECORDED]->(v)
        SET r.recorded_at = $now${p.demo ? ", r.demo = true" : ""}`,
     {

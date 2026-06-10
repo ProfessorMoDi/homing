@@ -42,6 +42,7 @@ import {
   syncVoice,
 } from "./neo4jClient";
 import { currentUserContext, DEMO_ID, type UserContext } from "./currentUser";
+import { isCollect } from "./appMode";
 import {
   fillSignupGaps,
   pickArchetype,
@@ -305,6 +306,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // failures.
   useEffect(() => {
     if (!hydrated) return;
+    // The collect build never uses activities — it only records who the person
+    // is and what they like. Persisting analyze's throwaway activity ideas would
+    // just pile up orphan Activity nodes that accumulate on every re-record.
+    if (isCollect()) return;
     for (const a of state.suggestedActivities) {
       if (!a?.id || syncedRef.current.has(a.id)) continue;
       syncedRef.current.add(a.id);

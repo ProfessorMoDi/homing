@@ -23,7 +23,7 @@ function GoogleIcon() {
 }
 
 export default function SignUp() {
-  const { state, setSignup } = useApp();
+  const { state, setSignup, commitSignup } = useApp();
   const { ready, sendMagicLink, signInWithGoogle } = useAuth();
   const router = useRouter();
   const s = state.signup;
@@ -38,6 +38,9 @@ export default function SignUp() {
     if (!baseOk || !emailOk) return;
     setError(null);
     setBusy(true);
+    // Create the User node up front so the voice + interests written during
+    // onboarding actually attach to it (they key off the email-derived id).
+    commitSignup();
     // Fire the sign-in link in the background — it's only so they can log back
     // in later, so onboarding never waits on it. Verification is optional.
     if (ready) void sendMagicLink(s.email).catch(() => {});
@@ -54,6 +57,8 @@ export default function SignUp() {
         email: user.email || s.email,
         first_name: s.first_name || user.displayName?.split(" ")[0] || "",
       });
+      // Create the User node now (reads the freshest state via setState).
+      commitSignup();
       router.push("/voice");
     } catch (e) {
       const code = (e as { code?: string }).code || "";
