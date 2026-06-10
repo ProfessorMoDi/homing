@@ -527,9 +527,8 @@ function Transcribing() {
             <div className="text-[13px] text-[var(--color-ink-soft)] leading-relaxed">
               {isLive ? (
                 <>
-                  Your audio is transcribed by ElevenLabs Scribe and your themes
-                  are analysed by Ollama, then the audio is discarded. We keep
-                  only the interests you confirm.
+                  Homi listens once, catches what you&apos;re into, and lets the
+                  recording go. Only the interests you confirm stick around.
                 </>
               ) : (
                 <>
