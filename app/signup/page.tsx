@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { Label, PrimaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { exitDemoSession } from "@/lib/appMode";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -39,6 +40,7 @@ export default function SignUp() {
     if (!baseOk || !emailOk) return;
     setError(null);
     setBusy(true);
+    exitDemoSession();
     // Create the User node up front so the voice + interests written during
     // onboarding actually attach to it (they key off the email-derived id).
     commitSignup();
@@ -58,6 +60,7 @@ export default function SignUp() {
     if (!baseOk) return;
     setError(null);
     setBusy(true);
+    exitDemoSession();
     try {
       const user = await signInWithGoogle();
       setSignup({

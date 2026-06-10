@@ -1,28 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { Pigeon, PigeonMark } from "@/components/Pigeon";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
-import { useApp } from "@/lib/store";
 import { appMode, ENV_APP_MODE, type AppMode } from "@/lib/appMode";
 
 export default function Landing() {
-  const router = useRouter();
-  const { fillSignupRandom } = useApp();
-
-  // Resolve the mode after mount so a ?mode= override or stored preference can
-  // win without risking an SSR hydration mismatch (the server always renders
-  // the env default).
   const [mode, setMode] = useState<AppMode>(ENV_APP_MODE);
   useEffect(() => setMode(appMode()), []);
-
-  function skipSignupDemo() {
-    fillSignupRandom();
-    router.push("/voice?sample=1");
-  }
 
   return (
     <div className="flex flex-col min-h-dvh">
@@ -119,18 +106,6 @@ export default function Landing() {
                 We turn your voice into interests, then discard the audio. No
                 password — we email you a one-tap sign-in link.
               </PrivacyNote>
-              {mode === "full" && (
-                <div className="text-center mt-1">
-                  <button
-                    type="button"
-                    onClick={skipSignupDemo}
-                    className="text-[11.5px] text-[var(--color-muted)] hover:text-[var(--color-ink-soft)] inline-flex items-center gap-1 transition-colors"
-                  >
-                    Skip signup (demo with random profile)
-                    <ArrowRight size={11} />
-                  </button>
-                </div>
-              )}
             </>
           )}
         </div>

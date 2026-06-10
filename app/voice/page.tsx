@@ -127,11 +127,10 @@ export default function VoiceOnboarding() {
     };
   }, [recording]);
 
+  const mode = useAppMode();
   const doneEnabled = seconds >= 25;
   const skipEnabled = recording && seconds >= 1;
-  // Skip-90s and the canned sample profile are flow shortcuts for the demo /
-  // full builds. The normal/collect build real users get is clean.
-  const showDemoTools = useAppMode() !== "collect";
+  const showDemoTools = mode === "demo";
 
   async function onStart() {
     if (recording) return;
