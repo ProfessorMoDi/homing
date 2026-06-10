@@ -39,8 +39,6 @@ const COMMIT = [
   ["open-ended", "Open-ended"],
 ] as const;
 
-const POSTCODE_RE = /^\d{4}\s?[A-Za-z]{2}$/;
-
 const LABELS: Record<string, string> = Object.fromEntries([
   ...AVAIL,
   ...COMMIT,
@@ -96,8 +94,8 @@ const QUESTIONS: Record<FieldKey, Question> = {
     key: "postcode",
     kind: "postcode",
     eyebrow: "Where you are",
-    title: "Where in Rotterdam are you?",
-    subtitle: "We use this to lean toward activities near you.",
+    title: "What's your postcode?",
+    subtitle: "We use it to lean toward activities near you. Any country is fine.",
   },
   languages_spoken: {
     key: "languages_spoken",
@@ -153,7 +151,8 @@ function isDone(key: FieldKey, s: Signup): boolean {
     case "gender_pref":
       return !!s.gender_pref;
     case "postcode":
-      return !!s.postcode && POSTCODE_RE.test(s.postcode.trim());
+      // Accept any country's postcode — not everyone is Dutch.
+      return s.postcode.trim().length >= 3;
     case "languages_spoken":
       return (
         s.languages_spoken.length > 0 &&
@@ -459,8 +458,8 @@ export default function SignUpDetails() {
         {q.kind === "postcode" && (
           <input
             className="field"
-            placeholder="3062 PA"
-            maxLength={7}
+            placeholder="e.g. 3062 PA, 10115, SW1A 1AA"
+            maxLength={12}
             autoFocus
             value={s.postcode}
             onChange={(e) => setSignup({ postcode: e.target.value.toUpperCase() })}
@@ -473,7 +472,7 @@ export default function SignUpDetails() {
         {attempted && !currentValid() && (
           <p className="text-[12.5px] text-[var(--color-clay)] mt-3">
             {q.kind === "postcode"
-              ? "Enter a Dutch postcode, like 3062 PA."
+              ? "Enter your postcode."
               : q.language
                 ? "Pick at least one — and name your other language if you chose Other."
                 : "Pick at least one to continue."}
