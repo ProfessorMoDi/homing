@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Mail, ArrowRight, Check, AlertCircle, RotateCcw } from "lucide-react";
+import { ArrowRight, AlertCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Label, PrimaryButton, SecondaryButton } from "@/components/Bits";
+import { Label, PrimaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 
@@ -27,38 +28,23 @@ export default function SignUp() {
   const router = useRouter();
   const s = state.signup;
 
-  const [showAgeWarn, setShowAgeWarn] = useState(false);
-  const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ageNum = s.age ?? 0;
-  const tooYoung = s.age !== null && ageNum > 0 && ageNum < 18;
-  const tooOld = s.age !== null && ageNum > 29;
-  const ageOk = ageNum >= 18 && ageNum <= 29;
-  const baseOk = !!s.first_name && ageOk;
+  const baseOk = !!s.first_name;
   const emailOk = EMAIL_RE.test(s.email);
 
-  async function onMagicLink() {
-    if (tooYoung || tooOld) return setShowAgeWarn(true);
+  function onStart() {
     if (!baseOk || !emailOk) return;
     setError(null);
     setBusy(true);
-    setPhase("sending");
-    try {
-      if (ready) await sendMagicLink(s.email);
-      setPhase("sent");
-    } catch (e) {
-      console.error("magic link failed", e);
-      setError("We couldn't send the link. Check the email and try again.");
-      setPhase("form");
-    } finally {
-      setBusy(false);
-    }
+    // Fire the sign-in link in the background — it's only so they can log back
+    // in later, so onboarding never waits on it. Verification is optional.
+    if (ready) void sendMagicLink(s.email).catch(() => {});
+    router.push("/voice");
   }
 
   async function onGoogle() {
-    if (tooYoung || tooOld) return setShowAgeWarn(true);
     if (!baseOk) return;
     setError(null);
     setBusy(true);
@@ -75,55 +61,21 @@ export default function SignUp() {
         console.error("google sign-in failed", e);
         setError("Google sign-in didn't complete. Please try again.");
       }
-    } finally {
       setBusy(false);
     }
-  }
-
-  if (phase === "sent") {
-    return (
-      <AppShell back="/" title="Check your inbox">
-        <div className="flex flex-col items-center text-center pt-8">
-          <span className="grid place-items-center h-14 w-14 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] mb-4 animate-pop-check">
-            <Mail size={26} />
-          </span>
-          <h1 className="display text-[24px] mb-2">Check your email</h1>
-          <p className="text-[14px] text-[var(--color-ink-soft)] leading-relaxed max-w-[20rem]">
-            We sent a one-tap sign-in link to{" "}
-            <span className="font-medium text-[var(--color-ink)]">{s.email}</span>.
-            Open it on this device to continue — no password needed.
-          </p>
-        </div>
-
-        <div className="card-outline p-4 mt-7 text-[13px] text-[var(--color-muted)] leading-relaxed">
-          Didn&apos;t get it? Check spam, or wait a moment and resend. The link
-          expires after a while for your security.
-        </div>
-
-        <div className="grid gap-2.5 mt-6">
-          <PrimaryButton onClick={onMagicLink} disabled={busy}>
-            <RotateCcw size={15} />
-            Resend the link
-          </PrimaryButton>
-          <SecondaryButton onClick={() => setPhase("form")}>
-            Use a different email
-          </SecondaryButton>
-        </div>
-      </AppShell>
-    );
   }
 
   return (
     <AppShell back="/" title="Create your account">
       <div className="mb-5">
         <p className="text-[12px] text-[var(--color-muted)] text-center">
-          No password — we&apos;ll email you a one-tap sign-in link
+          No password — we&apos;ll email you a link so you can sign back in later
         </p>
       </div>
 
       <h1 className="display text-[24px] mb-1">Join HOMING</h1>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-6">
-        For young adults, 18–29.
+        Just a few basics to get started.
       </p>
 
       <div className="grid gap-3 mb-5">
@@ -161,12 +113,6 @@ export default function SignUp() {
             />
           </div>
         </div>
-        {showAgeWarn && (tooYoung || tooOld) && (
-          <div className="card-outline p-3 text-[13px] text-[var(--color-ink-soft)] border-[var(--color-clay)]">
-            HOMING is currently piloting for 18–29 only. A younger track would
-            need separate safeguarding.
-          </div>
-        )}
         {error && (
           <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]">
             <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
@@ -175,9 +121,11 @@ export default function SignUp() {
         )}
       </div>
 
-      <PrimaryButton onClick={onMagicLink} disabled={!baseOk || !emailOk || busy}>
-        <Mail size={16} />
-        {phase === "sending" ? "Sending link…" : "Email me a sign-in link"}
+      <PrimaryButton onClick={onStart} disabled={!baseOk || !emailOk || busy}>
+        <span className="inline-flex items-center justify-center gap-1.5">
+          Start
+          <ArrowRight size={16} />
+        </span>
       </PrimaryButton>
 
       <div className="flex items-center gap-3 my-4">
@@ -196,9 +144,11 @@ export default function SignUp() {
         Continue with Google
       </button>
 
-      <p className="text-[12px] text-[var(--color-muted)] text-center mt-4 inline-flex items-center justify-center gap-1.5 w-full">
-        <Check size={13} className="text-[var(--color-sage-deep)]" />
-        Your email is only used to sign you in and connect your activities.
+      <p className="text-[12.5px] text-[var(--color-muted)] text-center mt-5">
+        Already joined?{" "}
+        <Link href="/login" className="text-[var(--color-sage-deep)] underline underline-offset-2">
+          Log in
+        </Link>
       </p>
     </AppShell>
   );
