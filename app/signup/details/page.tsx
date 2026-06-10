@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
@@ -112,7 +112,7 @@ const QUESTIONS: Record<FieldKey, Question> = {
     key: "languages_comfortable",
     kind: "multi",
     eyebrow: "Languages",
-    title: "Comfortable using these in a group?",
+    title: "Which languages are you comfortable in?",
     subtitle: "Pick all that apply.",
     options: LANG_OPTIONS,
     language: true,
@@ -134,11 +134,13 @@ const QUESTIONS: Record<FieldKey, Question> = {
   },
 };
 
+// Kept deliberately short — this is a send-to-friends data-collection flow, so
+// every extra question costs completion. gender_preference (matching-only) is
+// dropped, and a single "comfortable in" languages question also fills the
+// "spoken" set behind the scenes.
 const ORDER: FieldKey[] = [
   "gender",
-  "gender_pref",
   "postcode",
-  "languages_spoken",
   "languages_comfortable",
   "availability",
   "commitment",
@@ -172,26 +174,30 @@ function isDone(key: FieldKey, s: Signup): boolean {
 }
 
 export default function SignUpDetails() {
-  const { state, setSignup, commitSignup, fillSignupRandom } = useApp();
+  const { state, setSignup, commitSignup, fillSignupRandom, hydrated } = useApp();
   const router = useRouter();
   const s = state.signup;
 
-  // Snapshot the missing questions once, on mount, so answering one doesn't
-  // re-index the flow underneath the user. The provider hydrates before this
-  // page renders during a normal in-session navigation, so the snapshot
-  // already reflects whatever the voice analysis pre-filled.
-  const [steps] = useState<FieldKey[]>(() =>
-    ORDER.filter((k) => !isDone(k, state.signup)),
-  );
+  // Snapshot the missing questions once — but only after the store has
+  // hydrated from localStorage, otherwise a direct load / refresh would
+  // snapshot the empty initial state and show questions the voice pass already
+  // answered. Null until ready so we can show a brief loader.
+  const [steps, setSteps] = useState<FieldKey[] | null>(null);
+  useEffect(() => {
+    if (hydrated && steps === null) {
+      setSteps(ORDER.filter((k) => !isDone(k, state.signup)));
+    }
+  }, [hydrated, steps, state.signup]);
   const [idx, setIdx] = useState(0);
   const [attempted, setAttempted] = useState(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const total = steps.length;
-  const current = steps[idx];
+  const total = steps?.length ?? 0;
+  const current = steps?.[idx];
 
   // What the voice pass already filled in — shown as reassurance on the first
   // screen so the form feels like a confirmation, not an interrogation.
+  // Recomputed once hydration lands so it reflects the real pre-filled values.
   const heard = useMemo(() => {
     const items: string[] = [];
     if (s.languages_comfortable.length)
@@ -207,7 +213,7 @@ export default function SignUpDetails() {
     if (s.commitment) items.push(`Rhythm · ${LABELS[s.commitment] ?? s.commitment}`);
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hydrated]);
 
   const toggleArr = (arr: string[], key: string) =>
     arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key];
@@ -264,6 +270,18 @@ export default function SignUpDetails() {
     router.push(nextAfterProfile);
   }
 
+  // Wait for the one-shot snapshot (taken after hydration) before deciding
+  // which questions to show.
+  if (steps === null) {
+    return (
+      <AppShell back="/themes" title="Quick profile">
+        <div className="flex items-center justify-center min-h-[40dvh] text-[13px] text-[var(--color-muted)]">
+          Loading your profile…
+        </div>
+      </AppShell>
+    );
+  }
+
   // Everything already known (typical for the sample-recording demo path).
   if (total === 0) {
     return (
@@ -313,14 +331,11 @@ export default function SignUpDetails() {
     );
   }
 
+  if (!current) return null;
   const q = QUESTIONS[current];
   const showLangOther =
-    q.language &&
-    (s.languages_spoken.includes("Other") ||
-      s.languages_comfortable.includes("Other")) &&
-    (q.key === "languages_spoken"
-      ? s.languages_spoken.includes("Other")
-      : s.languages_comfortable.includes("Other"));
+    q.key === "languages_comfortable" &&
+    s.languages_comfortable.includes("Other");
 
   return (
     <AppShell back="/themes" title="Quick profile">
@@ -414,11 +429,19 @@ export default function SignUpDetails() {
                   key={k}
                   label={v}
                   selected={(s[q.key] as string[]).includes(k)}
-                  onToggle={() =>
-                    setSignup({
-                      [q.key]: toggleArr(s[q.key] as string[], k),
-                    })
-                  }
+                  onToggle={() => {
+                    const next = toggleArr(s[q.key] as string[], k);
+                    // The single languages question fills both "comfortable"
+                    // and "spoken" so the graph still gets SPEAKS edges.
+                    if (q.key === "languages_comfortable") {
+                      setSignup({
+                        languages_comfortable: next,
+                        languages_spoken: next,
+                      });
+                    } else {
+                      setSignup({ [q.key]: next });
+                    }
+                  }}
                 />
               ))}
             </div>

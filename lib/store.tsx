@@ -253,6 +253,8 @@ interface Ctx {
   /** Leave the named group — drops the MEMBER_OF edge for current user. */
   leaveRecurringGroup: (groupId: string) => void;
   resetDemo: () => void;
+  /** True once localStorage has been read into state — gates one-shot snapshots. */
+  hydrated: boolean;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -894,6 +896,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     createRecurringGroup,
     leaveRecurringGroup,
     resetDemo,
+    hydrated,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

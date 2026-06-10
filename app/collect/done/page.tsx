@@ -6,7 +6,8 @@
 // this build; the whole point was to add one more real person to the network.
 
 import { useCallback, useState } from "react";
-import { Check, Share2, RotateCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Check, Share2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Pill, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
@@ -14,7 +15,13 @@ import { useApp } from "@/lib/store";
 
 export default function CollectDone() {
   const { state, resetDemo } = useApp();
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
+
+  function done() {
+    resetDemo();
+    router.push("/");
+  }
 
   const topics = state.topics.filter((t) => !t.hidden).slice(0, 8);
   const name = state.signup.first_name?.trim();
@@ -77,9 +84,9 @@ export default function CollectDone() {
             {copied ? "Link copied!" : "Invite a friend to the flock"}
           </span>
         </PrimaryButton>
-        <SecondaryButton onClick={resetDemo}>
-          <RotateCcw size={15} />
-          Add someone else
+        <SecondaryButton onClick={done}>
+          <Check size={15} />
+          Done
         </SecondaryButton>
       </div>
 

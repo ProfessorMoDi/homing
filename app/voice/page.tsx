@@ -126,7 +126,7 @@ export default function VoiceOnboarding() {
     };
   }, [recording]);
 
-  const doneEnabled = seconds >= 90;
+  const doneEnabled = seconds >= 60;
   const skipEnabled = recording && seconds >= 1;
   // Skip-90s and the canned sample profile are flow shortcuts for the demo /
   // full builds. The normal/collect build real users get is clean.
@@ -215,7 +215,7 @@ export default function VoiceOnboarding() {
   return (
     <AppShell back="/signup" title="Voice onboarding">
       <p className="text-[14px] text-[var(--color-ink-soft)] mb-3 text-center">
-        Talk for around two minutes.
+        Talk for about a minute.
       </p>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-3 text-center px-2">
         Tell us what you&apos;ve been into lately, what you wish you did more
@@ -282,7 +282,7 @@ export default function VoiceOnboarding() {
 
         {!doneEnabled && recording && (
           <p className="text-[12px] text-[var(--color-muted)]">
-            Done unlocks after 90 seconds
+            Done unlocks after 60 seconds
           </p>
         )}
       </div>
@@ -310,7 +310,7 @@ export default function VoiceOnboarding() {
               disabled={!skipEnabled}
             >
               <FastForward size={14} />
-              Done now (demo · skip 90s)
+              Done now (demo · skip 60s)
             </button>
             <SecondaryButton onClick={onSample}>
               <Sparkles size={16} />
