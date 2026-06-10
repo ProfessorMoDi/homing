@@ -152,6 +152,11 @@ function Transcribing() {
     loadSampleVoice,
     setLiveProfile,
     setLiveTranscript,
+    setDetectedLanguage,
+    startVoicePipeline,
+    pipelineStage,
+    pipelineError,
+    retryPipeline,
   } = useApp();
 
   const [stage, setStage] = useState<Stage>(0);
@@ -210,28 +215,30 @@ function Transcribing() {
     if (isLive) {
       const audio = takeAudio();
       if (!audio) {
-        // Reload or direct nav with no blob in memory — graceful fall-back.
-        if (state.transcript || state.topics.length > 0) {
-          runFakeProgression();
+        // Happy path now runs the pipeline from /voice → /signup/details.
+        // This screen is a fallback when audio is gone or you deep-link here.
+        if (state.transcript || state.topics.length > 0 || pipelineStage !== "idle") {
+          setStage(2);
         } else {
-          loadSampleVoice();
-          runFakeProgression();
+          setErrMsg(
+            "We lost your recording — that can happen if you refresh the page. Please go back and record again.",
+          );
+          setStage(4);
         }
         return;
       }
-      runRealPipeline(audio.blob, audio.demoMode).catch((e) => {
-        console.error("Pipeline crashed", e);
-        setErrMsg(
-          "Something tripped on the way through. Try again from the start.",
-        );
-        setStage(4);
-      });
+      startVoicePipeline(audio.blob);
+      router.replace("/signup/details?fromVoice=1");
       return;
     }
 
-    // Direct navigation, no flags.
-    if (state.topics.length === 0) loadSampleVoice();
-    runFakeProgression();
+    // Direct navigation without ?live= or ?sample= — don't invent a profile.
+    if (state.transcript || state.topics.length > 0) {
+      runFakeProgression();
+    } else {
+      setErrMsg("Start from the voice screen to record.");
+      setStage(4);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { fakeTimersRef.current.forEach(clearTimeout); };
   }, []);
@@ -244,16 +251,22 @@ function Transcribing() {
     ];
   }
 
-  async function runRealPipeline(blob: Blob, demoMode: boolean) {
+  async function runRealPipeline(blob: Blob, _demoMode: boolean) {
     setStage(1);
     let transcript = "";
+    let detectedLang: string | null = null;
     try {
       const form = new FormData();
       form.append("audio", blob, "recording.webm");
       const r = await fetch("/api/transcribe", { method: "POST", body: form });
       if (!r.ok) throw new Error(`transcribe ${r.status}`);
-      const data = (await r.json()) as { text?: string };
+      const data = (await r.json()) as { text?: string; language?: string | null };
       transcript = (data.text || "").trim();
+      detectedLang =
+        typeof data.language === "string" && data.language.trim()
+          ? data.language.trim()
+          : null;
+      if (detectedLang) setDetectedLanguage(detectedLang);
       if (!transcript) throw new Error("empty transcript");
     } catch (e) {
       console.error("Transcribe failed", e);
@@ -272,37 +285,62 @@ function Transcribing() {
       const r = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, demoMode }),
+        body: JSON.stringify({
+          transcript,
+          detected_language: detectedLang,
+        }),
       });
       if (r.ok) {
-        const analysis = (await r.json()) as {
+        const analysis = (await r.json()) as Parameters<
+          typeof setLiveProfile
+        >[1] & {
           topics: { title: string; explanation: string; tags: string[] }[];
-          minor_interests?: string[];
-          languages?: string[];
-          activity_types?: string[];
-          availability?: string[];
-          commitment?: string;
-          activities?: Parameters<typeof setLiveProfile>[1]["activities"];
         };
         if (analysis.topics?.length > 0) {
+          let activities = analysis.activities ?? [];
+          if (activities.length === 0) {
+            try {
+              const sr = await fetch("/api/suggest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  transcript,
+                  topics: analysis.topics,
+                  languages: analysis.languages,
+                  availability_hints: analysis.availability,
+                  minor_interests: analysis.minor_interests,
+                }),
+              });
+              if (sr.ok) {
+                const sd = (await sr.json()) as {
+                  activities?: typeof activities;
+                };
+                activities = sd.activities ?? [];
+              }
+            } catch (e) {
+              console.warn("Suggest fallback after empty plan pass failed", e);
+            }
+          }
           setLiveProfile(transcript, {
             topics: analysis.topics,
             minor_interests: analysis.minor_interests ?? [],
             languages: analysis.languages ?? [],
+            language_confidence: analysis.language_confidence,
             activity_types: analysis.activity_types ?? [],
             availability: analysis.availability ?? [],
             commitment: analysis.commitment ?? "",
-            activities: analysis.activities ?? [],
+            implicit_preferences: analysis.implicit_preferences,
+            companion_reflection: analysis.companion_reflection,
+            matching_notes: analysis.matching_notes,
+            missing_fields: analysis.missing_fields,
+            detected_language: detectedLang,
+            activities,
           });
-          // Pre-seed the suggestions cache with the activities analyze already
-          // produced, keyed by the same topic signature /themes computes. This
-          // turns the /themes regeneration into an instant cache hit and skips
-          // a second, redundant /api/suggest LLM round-trip on the live path.
-          if (analysis.activities && analysis.activities.length > 0) {
+          if (activities.length > 0) {
             const sig = topicSignature(
               analysis.topics.map((t) => ({ title: t.title, tags: t.tags })),
             );
-            setCached(sig, analysis.activities);
+            setCached(sig, activities);
           }
         }
       } else {
@@ -342,7 +380,11 @@ function Transcribing() {
 
   const slide = SLIDES[slideIdx];
   const isError = stage === 4;
-  const isReady = stage === 3;
+  const isReady =
+    stage === 3 ||
+    state.topics.length > 0 ||
+    pipelineStage === "ready" ||
+    pipelineStage === "people";
 
   return (
     <AppShell back="/voice" title={isLive ? "Transcription" : "On-device transcription"}>
@@ -488,6 +530,25 @@ function Transcribing() {
             ))}
           </div>
 
+          {state.companionReflection && stage >= 3 && (
+            <Card className="mb-5 animate-pop-in">
+              <p className="text-[11.5px] uppercase tracking-wider text-[var(--color-muted)] mb-1.5">
+                Homi&apos;s take
+              </p>
+              <p className="text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
+                {state.companionReflection}
+              </p>
+              {state.topics.length > 0 && (
+                <p className="text-[12px] text-[var(--color-sage-deep)] mt-2">
+                  {state.topics.length} interest
+                  {state.topics.length === 1 ? "" : "s"} picked up
+                  {state.suggestedActivities.length > 0 &&
+                    ` · ${state.suggestedActivities.length} activity ideas`}
+                </p>
+              )}
+            </Card>
+          )}
+
           {/* Transcript preview slides in once we have one */}
           {transcriptPreview && (
             <Card
@@ -530,10 +591,15 @@ function Transcribing() {
                   Homi listens once, catches what you&apos;re into, and lets the
                   recording go. Only the interests you confirm stick around.
                 </>
+              ) : isSample ? (
+                <>
+                  Sample profile — pre-loaded interests for the demo. Live
+                  recordings use cloud transcription, then only text is kept.
+                </>
               ) : (
                 <>
-                  The model ran locally. No audio or transcript was sent to a
-                  server. You decide what HOMING keeps next.
+                  Demo path — interests are pre-loaded. On a live recording,
+                  audio is transcribed once and discarded after.
                 </>
               )}
             </div>
@@ -541,12 +607,34 @@ function Transcribing() {
         </>
       )}
 
+      {pipelineError && (
+        <div className="card-outline p-3 mb-4 border-[var(--color-clay)] text-[12.5px] text-[var(--color-ink-soft)] flex items-center justify-between gap-3">
+          <span>{pipelineError}</span>
+          <button
+            type="button"
+            onClick={retryPipeline}
+            className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       <PrimaryButton
-        onClick={() => router.push("/themes")}
-        disabled={!isReady}
+        onClick={() => router.push("/signup/details?fromVoice=1")}
+        disabled={!isReady && pipelineStage === "idle" && !state.transcript}
       >
-        Review themes
+        {state.topics.length > 0 ? "Continue to profile" : "Check progress"}
       </PrimaryButton>
+      {isReady && (
+        <button
+          type="button"
+          className="btn-secondary w-full mt-2"
+          onClick={() => router.push("/themes")}
+        >
+          Review themes
+        </button>
+      )}
     </AppShell>
   );
 }

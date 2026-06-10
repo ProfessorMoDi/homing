@@ -30,6 +30,7 @@ export default function SignUp() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
 
   const baseOk = !!s.first_name;
   const emailOk = EMAIL_RE.test(s.email);
@@ -43,7 +44,13 @@ export default function SignUp() {
     commitSignup();
     // Fire the sign-in link in the background — it's only so they can log back
     // in later, so onboarding never waits on it. Verification is optional.
-    if (ready) void sendMagicLink(s.email).catch(() => {});
+    if (ready) {
+      void sendMagicLink(s.email).catch(() => {
+        setLinkNote(
+          "We couldn't send your sign-in link — you can still continue. Try logging in later from the login page.",
+        );
+      });
+    }
     router.push("/voice");
   }
 
@@ -122,6 +129,12 @@ export default function SignUp() {
           <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]">
             <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
             <p className="text-[12.5px] text-[var(--color-ink-soft)]">{error}</p>
+          </div>
+        )}
+        {linkNote && (
+          <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]/60">
+            <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
+            <p className="text-[12.5px] text-[var(--color-ink-soft)]">{linkNote}</p>
           </div>
         )}
       </div>

@@ -1,96 +1,102 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cleanupTranscript } from "@/lib/transcriptCleanup";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
-const SYSTEM_PROMPT = `You analyze a voice transcript from HOMING, an app that turns a young adult's interests into a small, low-pressure real-life activity in Rotterdam, Netherlands. The user is a student at Erasmus University Rotterdam (EUR).
+const MAX_TOPICS = 40;
+const MAX_ACTIVITIES = 40;
+
+const UNDERSTAND_PROMPT = `You analyze a voice transcript from HOMING, an app that turns a young adult's interests into small, low-pressure real-life activities in Rotterdam, Netherlands. The user is a student at Erasmus University Rotterdam (EUR).
 
 Return a strict JSON object with exactly these fields.
 
-1) topics — EVERY distinct interest the speaker actually mentioned. Do NOT cap
-   this artificially — if they mention many things, return many (15–20+ is
-   completely fine). The user should feel that nothing they said was missed.
-   Each item is an object:
+1) topics — EVERY distinct interest the speaker actually mentioned. Do NOT cap artificially — if they mention many things, return many (15–20+ is fine; reward breadth). Each item:
    - title: 1–4 word phrase (Title Case)
-   - explanation: one short sentence paraphrasing what they said about it
+   - explanation: one short sentence paraphrasing what they said
    - tags: 2–5 lowercase keyword tags
+   - quote: a short verbatim phrase from the transcript that proves they said it
 
-   CRITICAL: One topic = one distinct, atomic concept. Do NOT bundle separable
-   interests under a single topic. Each should stand on its own so it can be
-   independently kept, edited, or removed. If they mention several varieties of
-   one thing — e.g. salsa AND bachata AND hip-hop dancing; or Korean AND Thai
-   food — make EACH variety its own topic. Never collapse them into one.
-   - "Cooking" and "Asian food" are TWO topics. Cooking is a craft; Asian
-     food is a cuisine. Someone who cooks may cook many cuisines.
-   - "Running" and "morning routines" are TWO topics.
-   - "Photography" and "wandering Rotterdam" are TWO topics.
-   - "Board games" and "Catan" are TWO topics ("Catan" is more specific).
-   - "Music" and "techno" are TWO topics; "Music production" is yet another.
-   - Each topic's tags should only describe THAT topic — never mix tags from
-     other concepts.
+   CRITICAL: One topic = one atomic concept. Never bundle separable interests.
+   "Cooking" and "Asian food" are TWO topics. "Salsa" and "bachata" are TWO topics.
+   DEDUP: Prefer distinct interests — do NOT emit many near-duplicates (e.g. five variants of "running"). Merge synonyms into one topic with richer tags.
 
-2) minor_interests — up to 12 short phrases capturing every smaller detail,
-   preference, or constraint they mentioned (favourite spots, group-size
-   preference, vibe, foods, specific names, times of day, etc.). Only things
-   they actually said.
+   LANGUAGE NEGATION: If they say a language is rough, not comfortable, or "English only", do NOT list that language in languages[]. "My Dutch is still rough" means Dutch is NOT comfortable — exclude it. Only include languages they positively claim.
 
-3) languages — language names in Title Case the speaker EXPLICITLY said they
-   speak or are comfortable using. Only include a language they clearly stated.
-   NEVER infer a language from where they live, and never assume English,
-   Dutch, or German unless they said it. If none stated, return [].
+2) minor_interests — up to 20 short phrases for smaller details, preferences, constraints, spots, vibe, times. Only things they actually said.
 
-4) activity_types — 2–4 short style descriptors (e.g. "sit-down", "creative", "low-pressure first meeting", "outdoors", "structured", "games", "language exchange").
+3) languages — array of objects for languages they EXPLICITLY said they speak or are comfortable using:
+   - name: Title Case language name
+   - evidence_quote: verbatim phrase from transcript
+   Only include when clearly stated ("I speak…", "comfortable in…", "X is fine", "we could do it in German").
+   NEVER infer from nationality, city, university, or detected_language alone. If none stated, return [].
 
-5b) availability — array of zero or more tokens, chosen ONLY from this exact set, describing when the speaker said they are usually free:
-   "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible".
-   Capture what they ACTUALLY said, mapped to the closest token — but never add a specific day or time they did not name:
-   - "weekend(s)" / "Saturdays" / "Sundays" → "every-weekend"
-   - generic "evenings" / "after work" / "weeknights" → "weekday-evenings" (do NOT upgrade this to "thursday-evening")
-   - they explicitly name Thursday evening → "thursday-evening"
-   - "Friday morning/afternoon" → "friday-morning"
-   - "flexible" / "anytime" / "whenever" → "flexible"
-   Include only what they clearly said. If they mention timing that fits nothing here, still capture it in minor_interests. If no availability is mentioned, return [].
+4) language_confidence — "high" if at least one language has clear evidence_quote; "partial" if vague; "none" if no languages stated.
 
-5c) commitment — a single token, chosen ONLY from this exact set, capturing how much they want to commit:
-   "try-once" (just see how it feels / one time), "maybe-weekly" (maybe make it weekly), "regular-thing" (wants a regular/ongoing thing), "open-ended" (no fixed cadence). If unclear, return "".
+5) activity_types — 2–6 style descriptors from what they said (e.g. "low-pressure first meeting", "outdoors").
 
-5) activities — concrete activity suggestions, one or more for as many of their
-   interests as you can. MORE IS BETTER — if they mentioned ten things, lean
-   toward ten or more suggestions. There is no small cap; aim to cover
-   everything they brought up. Every suggestion must be grounded in something
-   they actually said (never invent). Each suggestion is an object:
-   - title: action-oriented phrase, 2–6 words (e.g. "Start a Catan round", "Casual photo walk", "Cook a new dish together")
-   - description: one short sentence about what would happen
-   - day: a realistic day of the week ("Thursday", "Saturday", etc.)
-   - time: realistic 24-hour time ("19:30", "14:00", etc.)
-   - duration: in plain words ("1.5 hours", "2 hours")
-   - location_area: a Rotterdam-context area ("Near EUR campus", "Kralingen", "Centrum", "Delfshaven", "Noord", "Hillegersberg")
-   - exact_venue: a specific plausible venue inside that area (a café, park, square, studio, etc.). Keep it short.
-   - group_size_target: integer 3–6
-   - language: "English", "Dutch", or "German"
-   - energy_level: one of "Low-pressure / structured", "Relaxed", "Creative", "Active", "Lively small group"
-   - specific_interest_tags: 1–3 lowercase tags directly matching one topic
-   - broader_interest_tags: 1–3 lowercase tags that are related/broader
-   - reason: one sentence explaining why this fits, citing their words
+6) availability — tokens ONLY from: "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible". Only what they clearly said.
 
-   Each suggestion should map to a different topic where possible (so the user
-   gets variety, not three near-duplicates).
+7) commitment — one token from: "try-once", "maybe-weekly", "regular-thing", "open-ended", or "" if unclear.
+
+8) implicit_preferences — up to 12 practical between-the-lines signals (pace, group size, structure, "not looking for X"). Each object:
+   - phrase: short label
+   - evidence_quote: verbatim proof from transcript
+   Never mental-health or loneliness inference.
+
+9) companion_reflection — 2–4 warm, neutral sentences mirroring back what they want. If they named many interests, acknowledge the breadth. No therapy language.
+
+10) matching_notes — one paragraph: what to optimize matching on given their full interest set.
 
 Rules:
-- Use the speaker's own words and concepts wherever possible.
-- Never invent interests, hobbies, or facts the speaker did not mention.
-- Activity suggestions must be grounded — only suggest cooking if they
-  mentioned food/cooking; only suggest running if they mentioned movement; etc.
-- Avoid stigmatizing or therapeutic language. Never use: "lonely",
-  "loneliness", "find your tribe", "mental health", "therapy", "intervention",
-  "best friends", "dating", "networking".
-- Keep tone calm, neutral, respectful.
-- Return ONLY a JSON object, no prose, no markdown fences.`;
+- Never invent interests, languages, or facts not in the transcript.
+- Avoid: lonely, loneliness, find your tribe, mental health, therapy, intervention, best friends, dating, networking.
+- Return ONLY JSON, no markdown fences.`;
 
-interface Topic {
+const PLAN_PROMPT = `You generate concrete activity suggestions for HOMING in Rotterdam for an EUR student.
+
+You receive their full transcript plus structured understanding (topics, preferences, languages).
+
+Return JSON: { activities: [...] }
+
+Generate at least ONE grounded activity per topic where a real Rotterdam meetup is plausible. MORE IS BETTER — if they named ten interests, aim for ten or more activities.
+
+Each activity:
+- title: action-oriented, 2–6 words
+- description: one short sentence
+- day, time, duration: realistic; use reasonable defaults only for scheduling if not mentioned
+- location_area: Rotterdam area
+- exact_venue: plausible specific venue
+- group_size_target: integer 3–6
+- language: use their stated comfortable language, or "Flexible" if unknown — NEVER default to English unless they said English
+- energy_level: one of "Low-pressure / structured", "Relaxed", "Creative", "Active", "Lively small group"
+- specific_interest_tags, broader_interest_tags: lowercase tags
+- linked_topic_title: must match one topic title exactly
+- transcript_quote: short verbatim phrase from transcript
+- reason: one sentence citing their words
+- scheduling_inferred: true if day/time were not stated and you chose defaults
+
+Rules:
+- Every activity must map to a topic they actually mentioned.
+- Never invent interests.
+- Avoid stigmatizing language.
+- Return ONLY JSON.`;
+
+interface TopicRow {
   title: string;
   explanation: string;
   tags: string[];
+  quote?: string;
+}
+
+interface LanguageRow {
+  name: string;
+  evidence_quote?: string;
+}
+
+interface ImplicitPref {
+  phrase: string;
+  evidence_quote?: string;
 }
 
 interface SuggestedActivity {
@@ -106,17 +112,24 @@ interface SuggestedActivity {
   energy_level: string;
   specific_interest_tags: string[];
   broader_interest_tags: string[];
+  linked_topic_title?: string;
+  transcript_quote?: string;
   reason: string;
+  scheduling_inferred?: boolean;
+  priority_rank?: number;
 }
 
-interface Analysis {
-  topics: Topic[];
+interface UnderstandResult {
+  topics: TopicRow[];
   minor_interests: string[];
-  languages: string[];
+  languages: LanguageRow[];
+  language_confidence: string;
   activity_types: string[];
   availability: string[];
   commitment: string;
-  activities: SuggestedActivity[];
+  implicit_preferences: ImplicitPref[];
+  companion_reflection: string;
+  matching_notes: string;
 }
 
 const AVAILABILITY_TOKENS = new Set([
@@ -131,6 +144,14 @@ const COMMITMENT_TOKENS = new Set([
   "maybe-weekly",
   "regular-thing",
   "open-ended",
+]);
+const MISSING_FIELD_TOKENS = new Set([
+  "languages_comfortable",
+  "languages_spoken",
+  "availability",
+  "commitment",
+  "gender",
+  "postcode",
 ]);
 
 function tokenList(v: unknown, allowed: Set<string>, max: number): string[] {
@@ -172,7 +193,7 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-function coerce(raw: unknown): Analysis {
+function coerceUnderstand(raw: unknown): UnderstandResult {
   const r = (raw ?? {}) as Record<string, unknown>;
   const topics = Array.isArray(r.topics)
     ? (r.topics as Record<string, unknown>[])
@@ -184,90 +205,137 @@ function coerce(raw: unknown): Analysis {
               ? t.explanation.slice(0, 240)
               : "",
           tags: lowerList(t.tags, 5),
+          quote:
+            typeof t.quote === "string" ? t.quote.slice(0, 200) : undefined,
         }))
-        .slice(0, 24)
+        .slice(0, MAX_TOPICS)
     : [];
-  const minor = strList(r.minor_interests, 12);
-  const langs = strList(r.languages, 6);
-  const types = strList(r.activity_types, 4);
-  const availability = tokenList(r.availability, AVAILABILITY_TOKENS, 5);
-  const commitment = oneToken(r.commitment, COMMITMENT_TOKENS);
-  const activities = Array.isArray(r.activities)
-    ? (r.activities as Record<string, unknown>[])
-        .filter((a) => typeof a?.title === "string")
-        .map((a) => ({
-          title: String(a.title).slice(0, 70),
-          description:
-            typeof a.description === "string"
-              ? a.description.slice(0, 200)
-              : "",
-          day:
-            typeof a.day === "string" && a.day.trim() ? a.day.trim() : "Thursday",
-          time:
-            typeof a.time === "string" && a.time.trim() ? a.time.trim() : "19:30",
-          duration:
-            typeof a.duration === "string" && a.duration.trim()
-              ? a.duration.trim()
-              : "1.5 hours",
-          location_area:
-            typeof a.location_area === "string" && a.location_area.trim()
-              ? a.location_area.trim()
-              : "Near EUR campus",
-          exact_venue:
-            typeof a.exact_venue === "string" && a.exact_venue.trim()
-              ? a.exact_venue.trim()
-              : "Venue confirmed in chat",
-          group_size_target: clampInt(a.group_size_target, 3, 6, 4),
-          language:
-            typeof a.language === "string" && a.language.trim()
-              ? a.language.trim()
-              : "English",
-          energy_level:
-            typeof a.energy_level === "string" && a.energy_level.trim()
-              ? a.energy_level.trim()
-              : "Low-pressure / structured",
-          specific_interest_tags: lowerList(a.specific_interest_tags, 3),
-          broader_interest_tags: lowerList(a.broader_interest_tags, 3),
-          reason:
-            typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
+
+  const languages = Array.isArray(r.languages)
+    ? (r.languages as Record<string, unknown>[])
+        .filter((l) => typeof l?.name === "string")
+        .map((l) => ({
+          name: String(l.name).slice(0, 40),
+          evidence_quote:
+            typeof l.evidence_quote === "string"
+              ? l.evidence_quote.slice(0, 200)
+              : undefined,
         }))
-        .slice(0, 24)
+        .slice(0, 10)
     : [];
+
+  const implicit_preferences = Array.isArray(r.implicit_preferences)
+    ? (r.implicit_preferences as Record<string, unknown>[])
+        .filter((p) => typeof p?.phrase === "string")
+        .map((p) => ({
+          phrase: String(p.phrase).slice(0, 120),
+          evidence_quote:
+            typeof p.evidence_quote === "string"
+              ? p.evidence_quote.slice(0, 200)
+              : undefined,
+        }))
+        .slice(0, 12)
+    : [];
+
+  const conf = String(r.language_confidence ?? "none").toLowerCase();
+  const language_confidence =
+    conf === "high" || conf === "partial" ? conf : "none";
+
   return {
     topics,
-    minor_interests: minor,
-    languages: langs,
-    activity_types: types,
-    availability,
-    commitment,
-    activities,
+    minor_interests: strList(r.minor_interests, 20),
+    languages,
+    language_confidence,
+    activity_types: strList(r.activity_types, 6),
+    availability: tokenList(r.availability, AVAILABILITY_TOKENS, 5),
+    commitment: oneToken(r.commitment, COMMITMENT_TOKENS),
+    implicit_preferences,
+    companion_reflection:
+      typeof r.companion_reflection === "string"
+        ? r.companion_reflection.slice(0, 600)
+        : "",
+    matching_notes:
+      typeof r.matching_notes === "string"
+        ? r.matching_notes.slice(0, 500)
+        : "",
   };
 }
 
-export async function POST(req: NextRequest) {
-  const apiKey = process.env.OLLAMA_API_KEY;
-  const baseUrl = process.env.LLM_BASE_URL ?? "https://ollama.com/v1";
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Missing OLLAMA_API_KEY on the server" },
-      { status: 500 },
-    );
+function coerceActivities(raw: unknown): SuggestedActivity[] {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(r.activities)) return [];
+  return (r.activities as Record<string, unknown>[])
+    .filter((a) => typeof a?.title === "string")
+    .map((a, i) => ({
+      title: String(a.title).slice(0, 70),
+      description:
+        typeof a.description === "string" ? a.description.slice(0, 200) : "",
+      day:
+        typeof a.day === "string" && a.day.trim() ? a.day.trim() : "",
+      time:
+        typeof a.time === "string" && a.time.trim() ? a.time.trim() : "",
+      duration:
+        typeof a.duration === "string" && a.duration.trim()
+          ? a.duration.trim()
+          : "1.5 hours",
+      location_area:
+        typeof a.location_area === "string" && a.location_area.trim()
+          ? a.location_area.trim()
+          : "",
+      exact_venue:
+        typeof a.exact_venue === "string" && a.exact_venue.trim()
+          ? a.exact_venue.trim()
+          : "",
+      group_size_target: clampInt(a.group_size_target, 3, 6, 4),
+      language:
+        typeof a.language === "string" && a.language.trim()
+          ? a.language.trim()
+          : "Flexible",
+      energy_level:
+        typeof a.energy_level === "string" && a.energy_level.trim()
+          ? a.energy_level.trim()
+          : "Low-pressure / structured",
+      specific_interest_tags: lowerList(a.specific_interest_tags, 3),
+      broader_interest_tags: lowerList(a.broader_interest_tags, 3),
+      linked_topic_title:
+        typeof a.linked_topic_title === "string"
+          ? a.linked_topic_title.slice(0, 60)
+          : undefined,
+      transcript_quote:
+        typeof a.transcript_quote === "string"
+          ? a.transcript_quote.slice(0, 200)
+          : undefined,
+      reason:
+        typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
+      scheduling_inferred: a.scheduling_inferred === true,
+      priority_rank: i + 1,
+    }))
+    .slice(0, MAX_ACTIVITIES);
+}
+
+function languageNames(rows: LanguageRow[]): string[] {
+  return rows.map((l) => l.name).filter(Boolean);
+}
+
+function computeMissingFields(u: UnderstandResult): string[] {
+  const missing: string[] = [];
+  if (u.language_confidence !== "high" || u.languages.length === 0) {
+    missing.push("languages_comfortable");
   }
+  if (u.availability.length === 0) missing.push("availability");
+  if (!u.commitment) missing.push("commitment");
+  // gender and postcode are never inferred from voice
+  missing.push("gender", "postcode");
+  return missing.filter((m) => MISSING_FIELD_TOKENS.has(m));
+}
 
-  let body: { transcript?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const transcript =
-    typeof body.transcript === "string" ? body.transcript.trim() : "";
-
-  if (!transcript) {
-    return NextResponse.json({ error: "Empty transcript" }, { status: 400 });
-  }
-
+async function callLlm(
+  apiKey: string,
+  baseUrl: string,
+  system: string,
+  user: string,
+  temperature: number,
+): Promise<unknown> {
   const r = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -276,65 +344,158 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: "gpt-oss:120b",
-      temperature: 0.3,
+      temperature,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: transcript },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
     }),
   });
 
   if (!r.ok) {
     const detail = await r.text().catch(() => "");
-    return NextResponse.json(
-      { error: `Ollama ${r.status}`, detail },
-      { status: r.status },
-    );
+    throw new Error(`Ollama ${r.status}: ${detail}`);
   }
 
-  let payload: unknown;
-  try {
-    payload = await r.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Ollama returned non-JSON" },
-      { status: 502 },
-    );
-  }
-  const content =
-    (payload as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
-      ?.message?.content ?? "";
-  if (!content) {
-    return NextResponse.json(
-      { error: "Empty model response", raw: payload },
-      { status: 502 },
-    );
-  }
+  const payload = (await r.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const content = payload?.choices?.[0]?.message?.content ?? "";
+  if (!content) throw new Error("Empty model response");
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(content);
+    return JSON.parse(content);
   } catch {
-    // Some models wrap JSON in ```json fences; try to recover.
     const match = content.match(/\{[\s\S]*\}/);
-    if (match) {
+    if (match) return JSON.parse(match[0]);
+    throw new Error("Could not parse model JSON");
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const apiKeyRaw = process.env.OLLAMA_API_KEY;
+  const baseUrl = process.env.LLM_BASE_URL ?? "https://ollama.com/v1";
+  if (!apiKeyRaw) {
+    return NextResponse.json(
+      { error: "Missing OLLAMA_API_KEY on the server" },
+      { status: 500 },
+    );
+  }
+  const apiKey = apiKeyRaw;
+
+  let body: {
+    transcript?: unknown;
+    detected_language?: unknown;
+    phase?: unknown;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const phase = body.phase === "full" ? "full" : "understand";
+
+  const rawTranscript =
+    typeof body.transcript === "string" ? body.transcript.trim() : "";
+  const detected_language =
+    typeof body.detected_language === "string" && body.detected_language.trim()
+      ? body.detected_language.trim()
+      : null;
+
+  if (!rawTranscript) {
+    return NextResponse.json({ error: "Empty transcript" }, { status: 400 });
+  }
+
+  const transcript = cleanupTranscript(rawTranscript);
+
+  let understood: UnderstandResult;
+  try {
+    const hint = detected_language
+      ? `\n\nSTT detected_language hint (do NOT use as sole evidence for languages): ${detected_language}`
+      : "";
+    const parsed = await callLlm(
+      apiKey,
+      baseUrl,
+      UNDERSTAND_PROMPT,
+      transcript + hint,
+      0.25,
+    );
+    understood = coerceUnderstand(parsed);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Understand pass failed";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
+
+  async function runPlanPass(): Promise<SuggestedActivity[]> {
+    const planUser = JSON.stringify(
+      {
+        transcript,
+        understanding: {
+          topics: understood.topics,
+          minor_interests: understood.minor_interests,
+          languages: understood.languages,
+          activity_types: understood.activity_types,
+          availability: understood.availability,
+          commitment: understood.commitment,
+          implicit_preferences: understood.implicit_preferences,
+        },
+      },
+      null,
+      2,
+    );
+    const planParsed = await callLlm(
+      apiKey,
+      baseUrl,
+      PLAN_PROMPT,
+      planUser,
+      0.35,
+    );
+    return coerceActivities(planParsed);
+  }
+
+  const langNames = languageNames(understood.languages);
+  const missing_fields = computeMissingFields(understood);
+
+  const understandPayload = {
+    topics: understood.topics,
+    minor_interests: understood.minor_interests,
+    languages: langNames,
+    language_confidence: understood.language_confidence,
+    activity_types: understood.activity_types,
+    availability: understood.availability,
+    commitment: understood.commitment,
+    implicit_preferences: understood.implicit_preferences,
+    companion_reflection: understood.companion_reflection,
+    matching_notes: understood.matching_notes,
+    missing_fields,
+    detected_language,
+  };
+
+  if (phase === "understand") {
+    return NextResponse.json(understandPayload);
+  }
+
+  let activities: SuggestedActivity[] = [];
+  try {
+    activities = await runPlanPass();
+    if (activities.length === 0 && understood.topics.length > 0) {
+      activities = await runPlanPass();
+    }
+  } catch (e) {
+    console.warn("Plan pass failed", e);
+    if (understood.topics.length > 0) {
       try {
-        parsed = JSON.parse(match[0]);
-      } catch {
-        return NextResponse.json(
-          { error: "Could not parse model JSON", raw: content },
-          { status: 502 },
-        );
+        activities = await runPlanPass();
+      } catch (retryErr) {
+        console.warn("Plan pass retry failed", retryErr);
       }
-    } else {
-      return NextResponse.json(
-        { error: "Could not parse model JSON", raw: content },
-        { status: 502 },
-      );
     }
   }
 
-  const analysis = coerce(parsed);
-  return NextResponse.json(analysis);
+  return NextResponse.json({
+    ...understandPayload,
+    activities,
+  });
 }

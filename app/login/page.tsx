@@ -18,23 +18,34 @@ export default function Login() {
   const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
   const [error, setError] = useState<string | null>(null);
 
-  const emailOk = EMAIL_RE.test(email);
+  const trimmed = email.trim();
+  const emailOk = EMAIL_RE.test(trimmed);
+  const showEmailHint = trimmed.length > 0 && !emailOk;
 
   async function send() {
-    if (!emailOk) return;
+    if (!emailOk) {
+      setError("Enter a valid email like you@university.nl");
+      return;
+    }
     setError(null);
     setPhase("sending");
     try {
       if (!ready) throw new Error("unconfigured");
-      await sendMagicLink(email);
+      await sendMagicLink(trimmed);
       setPhase("sent");
     } catch (e) {
       const code = (e as { code?: string }).code || "";
       console.error("login link failed", e);
       setError(
         code === "auth/unauthorized-continue-uri"
-          ? "Sign-in links only work on the live site, not this preview address."
-          : "We couldn't send the link. Check the email and try again.",
+          ? "This URL isn't authorized in Firebase yet. Use the production site, or add this domain under Firebase → Authentication → Settings → Authorized domains."
+          : code === "auth/operation-not-allowed"
+            ? "Email link sign-in isn't enabled. In Firebase Console → Authentication → Sign-in method, turn on Email/Password and Email link (passwordless)."
+            : code === "auth/configuration-not-found"
+              ? "Firebase Authentication isn't enabled for this project yet. Open Firebase Console → Authentication → Get started."
+              : !ready
+                ? "Sign-in isn't configured on this deployment (missing NEXT_PUBLIC_FIREBASE_* env vars)."
+                : "We couldn't send the link. Check the email and try again.",
       );
       setPhase("form");
     }
@@ -84,10 +95,26 @@ export default function Login() {
           autoComplete="email"
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && emailOk) send();
+            if (e.key === "Enter") send();
           }}
         />
+        {showEmailHint && (
+          <p className="text-[12px] text-[var(--color-clay)] mt-1.5">
+            Use a full address with @ and a domain (e.g. you@eur.nl).
+          </p>
+        )}
       </div>
+
+      {!ready && (
+        <div className="card-outline p-3 mb-4 flex items-start gap-2 border-[var(--color-clay)]">
+          <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
+          <p className="text-[12.5px] text-[var(--color-ink-soft)]">
+            Sign-in links aren&apos;t available here — Firebase env vars are
+            missing (common on Vercel Preview). Use production or set{" "}
+            <code className="text-[11px]">NEXT_PUBLIC_FIREBASE_*</code> locally.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="card-outline p-3 mb-4 flex items-start gap-2 border-[var(--color-clay)]">
@@ -96,10 +123,15 @@ export default function Login() {
         </div>
       )}
 
-      <PrimaryButton onClick={send} disabled={!emailOk || phase === "sending"}>
+      <PrimaryButton onClick={send} disabled={phase === "sending"}>
         <Mail size={16} />
         {phase === "sending" ? "Sending link…" : "Email me a sign-in link"}
       </PrimaryButton>
+      {!emailOk && trimmed.length === 0 && (
+        <p className="text-[12px] text-[var(--color-muted)] text-center mt-2">
+          Type your email above to continue.
+        </p>
+      )}
     </AppShell>
   );
 }

@@ -9,6 +9,7 @@ import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
+import { pipelineStageLabel } from "@/lib/voicePipeline";
 import {
   clearCached,
   getCached,
@@ -26,6 +27,11 @@ export default function Themes() {
     removeTopic,
     loadSampleVoice,
     setSuggestedActivities,
+    pipelineStage,
+    pipelineError,
+    retryPipeline,
+    flushGraphMirror,
+    refreshSimilarPeople,
   } = useApp();
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
@@ -34,7 +40,9 @@ export default function Themes() {
 
   // The collect build ends after the profile — it never shows activity
   // suggestions — so it must not wait on (or fire) the /api/suggest call.
-  const collect = useAppMode() === "collect";
+  const mode = useAppMode();
+  const collect = mode === "collect";
+  const showDemoSample = mode === "demo";
 
   // Forward progress is gated on *having* suggestions, not on the refresh
   // finishing. analyze (or the pre-seeded cache) already populated the cards,
@@ -42,6 +50,7 @@ export default function Themes() {
   // "error" both leave something usable on /suggestions.
   const canContinue =
     collect ||
+    state.topics.length > 0 ||
     state.suggestedActivities.length > 0 ||
     regen === "ready" ||
     regen === "error";
@@ -61,6 +70,18 @@ export default function Themes() {
   useEffect(() => {
     // Collect build never surfaces suggestions — don't spend an LLM call.
     if (collect) return;
+
+    // Pipeline already fetches suggestions in the background.
+    if (
+      state.suggestedActivities.length > 0 ||
+      pipelineStage === "planning" ||
+      pipelineStage === "syncing" ||
+      pipelineStage === "people" ||
+      pipelineStage === "ready"
+    ) {
+      if (state.suggestedActivities.length > 0) setRegen("ready");
+      return;
+    }
 
     const visibleTopics = state.topics
       .filter((t) => !t.hidden)
@@ -97,6 +118,7 @@ export default function Themes() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topics: visibleTopics,
+          transcript: state.transcript,
           languages: state.signup.languages_comfortable,
           availability_hints: state.signup.availability,
           minor_interests: state.minorInterests,
@@ -132,9 +154,12 @@ export default function Themes() {
     state.signup.languages_comfortable,
     state.signup.availability,
     state.minorInterests,
+    state.transcript,
     setSuggestedActivities,
     retryTick,
     collect,
+    pipelineStage,
+    state.suggestedActivities.length,
   ]);
 
   const onRetry = useCallback(() => {
@@ -151,27 +176,109 @@ export default function Themes() {
     setRetryTick((n) => n + 1);
   }, [state.topics]);
 
+  const pipelineBusy =
+    pipelineStage === "transcribing" || pipelineStage === "understanding";
+
   if (state.topics.length === 0) {
-    return (
-      <AppShell back="/transcribing" title="Main themes">
-        <div className="card p-6 text-center">
-          <p className="text-[14px] text-[var(--color-ink-soft)] mb-4">
-            Nothing to review yet. Load a sample to continue the demo.
+    const hasTranscript = !!state.transcript.trim();
+    const showSample = showDemoSample;
+    if (pipelineBusy || (hasTranscript && !pipelineError)) {
+      return (
+        <AppShell back="/signup/details" title="Main themes">
+          <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
+          <p className="text-[13.5px] text-[var(--color-muted)] mb-5">
+            {pipelineStageLabel(pipelineStage)}
           </p>
-          <SecondaryButton onClick={loadSampleVoice}>
-            Load sample
-          </SecondaryButton>
+          <div className="grid gap-3 mb-5">
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                className="card animate-pulse h-24 bg-[var(--color-cream-warm)]"
+              />
+            ))}
+          </div>
+        </AppShell>
+      );
+    }
+    return (
+      <AppShell back="/signup/details" title="Main themes">
+        <div className="card p-6 text-center">
+          <p className="text-[14px] text-[var(--color-ink-soft)] mb-4 leading-relaxed">
+            {pipelineError
+              ? pipelineError
+              : hasTranscript
+                ? "Homi couldn't pull themes from your recording. Try recording again — 30 seconds with several interests helps."
+                : "Nothing to review yet. Record your voice first."}
+          </p>
+          <div className="grid gap-2">
+            {pipelineError && (
+              <SecondaryButton onClick={retryPipeline}>Retry Homi</SecondaryButton>
+            )}
+            <SecondaryButton onClick={() => router.push("/voice")}>
+              Record again
+            </SecondaryButton>
+            {showSample && (
+              <SecondaryButton onClick={loadSampleVoice}>
+                Load sample
+              </SecondaryButton>
+            )}
+          </div>
         </div>
       </AppShell>
     );
   }
 
   return (
-    <AppShell back="/transcribing" title="Main themes">
+    <AppShell back="/signup/details" title="Main themes">
       <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
-      <p className="text-[13.5px] text-[var(--color-muted)] mb-5">
-        Just the big ones. You can edit, remove, or open everything else below.
+      <p className="text-[13.5px] text-[var(--color-muted)] mb-2">
+        Everything you mentioned — edit, remove, or hide anything that doesn&apos;t
+        fit.
       </p>
+      {state.topics.length > 0 && (
+        <p className="text-[12px] text-[var(--color-sage-deep)] mb-3">
+          {state.topics.length} interest{state.topics.length === 1 ? "" : "s"}
+          {state.suggestedActivities.length > 0 &&
+            ` → ${state.suggestedActivities.length} activity ideas`}
+        </p>
+      )}
+      {state.companionReflection && (
+        <div className="card-outline p-3.5 mb-4 text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
+          {state.companionReflection}
+        </div>
+      )}
+      {pipelineError && (
+        <div className="card-outline p-3 mb-4 flex items-start justify-between gap-3 border-[var(--color-clay)]">
+          <p className="text-[12.5px] text-[var(--color-ink-soft)]">{pipelineError}</p>
+          <button
+            type="button"
+            onClick={retryPipeline}
+            className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!collect && (
+        <div className="card-outline p-3 mb-4 text-[12.5px] text-[var(--color-ink-soft)]">
+          {state.suggestedActivities.length > 0 ? (
+            <>
+              <span className="text-[var(--color-sage-deep)] font-medium">
+                {state.suggestedActivities.length} activity ideas ready
+              </span>
+              {" — review interests below, then see suggestions."}
+            </>
+          ) : pipelineStage === "planning" || pipelineStage === "syncing" ? (
+            <>
+              <ThinkingDots size="small" /> Homi is drafting activity ideas from
+              your {state.topics.length} interests…
+            </>
+          ) : (
+            "Activities will appear on the next screen once Homi finishes drafting."
+          )}
+        </div>
+      )}
 
       <div className="grid gap-3 mb-5 stagger">
         {state.topics.map((t) => (
@@ -218,6 +325,11 @@ export default function Themes() {
                     <p className="text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
                       {t.explanation}
                     </p>
+                    {t.quote && (
+                      <p className="text-[12px] text-[var(--color-muted)] mt-1 italic">
+                        &ldquo;{t.quote}&rdquo;
+                      </p>
+                    )}
                   </div>
                   <button
                     aria-label="Edit"
@@ -247,16 +359,14 @@ export default function Themes() {
       {!collect && <RegenBadge status={regen} onRetry={onRetry} />}
 
       <PrimaryButton
-        onClick={() => router.push("/signup/details")}
+        onClick={() => {
+          void flushGraphMirror();
+          void refreshSimilarPeople();
+          router.push("/suggestions");
+        }}
         disabled={!canContinue}
       >
-        {canContinue ? (
-          "Looks right"
-        ) : (
-          <>
-            Waiting for fresh ideas <ThinkingDots size="small" />
-          </>
-        )}
+        {canContinue ? "Looks right" : "Waiting for interests…"}
       </PrimaryButton>
       <div className="grid grid-cols-2 gap-2 mt-3">
         <button

@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const audio = formData.get("audio");
+  const languageHint = formData.get("language_hint");
   if (!audio || !(audio instanceof Blob)) {
     return NextResponse.json(
       { error: "No audio file provided" },
@@ -35,6 +36,10 @@ export async function POST(req: NextRequest) {
   eleven.append("model_id", "scribe_v1");
   eleven.append("tag_audio_events", "false");
   eleven.append("diarize", "false");
+  // Optional ISO language hint improves multilingual accuracy when known.
+  if (typeof languageHint === "string" && languageHint.trim()) {
+    eleven.append("language_code", languageHint.trim().slice(0, 8));
+  }
 
   const r = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
     method: "POST",

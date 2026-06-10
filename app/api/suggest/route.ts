@@ -16,7 +16,7 @@ Output an object: { activities: [...] }. Generate one or more grounded suggestio
 - location_area: a Rotterdam-context area ("Near EUR campus", "Kralingen", "Centrum", "Delfshaven", "Noord", "Hillegersberg")
 - exact_venue: a specific plausible spot inside that area (a café, park, square, studio, etc.). Keep it short.
 - group_size_target: integer 3–6
-- language: "English", "Dutch", or "German"
+- language: their stated comfortable language, or "Flexible" if unknown — never default to English unless they said English
 - energy_level: one of "Low-pressure / structured", "Relaxed", "Creative", "Active", "Lively small group"
 - specific_interest_tags: 1–3 lowercase tags that directly match one topic
 - broader_interest_tags: 1–3 lowercase tags that are broader/related
@@ -73,9 +73,9 @@ function coerceActivities(raw: unknown): SuggestedActivity[] {
           ? a.description.slice(0, 200)
           : "",
       day:
-        typeof a.day === "string" && a.day.trim() ? a.day.trim() : "Thursday",
+        typeof a.day === "string" && a.day.trim() ? a.day.trim() : "",
       time:
-        typeof a.time === "string" && a.time.trim() ? a.time.trim() : "19:30",
+        typeof a.time === "string" && a.time.trim() ? a.time.trim() : "",
       duration:
         typeof a.duration === "string" && a.duration.trim()
           ? a.duration.trim()
@@ -83,16 +83,16 @@ function coerceActivities(raw: unknown): SuggestedActivity[] {
       location_area:
         typeof a.location_area === "string" && a.location_area.trim()
           ? a.location_area.trim()
-          : "Near EUR campus",
+          : "",
       exact_venue:
         typeof a.exact_venue === "string" && a.exact_venue.trim()
           ? a.exact_venue.trim()
-          : "Venue confirmed in chat",
+          : "",
       group_size_target: clampInt(a.group_size_target, 3, 6, 4),
       language:
         typeof a.language === "string" && a.language.trim()
           ? a.language.trim()
-          : "English",
+          : "Flexible",
       energy_level:
         typeof a.energy_level === "string" && a.energy_level.trim()
           ? a.energy_level.trim()
@@ -101,7 +101,7 @@ function coerceActivities(raw: unknown): SuggestedActivity[] {
       broader_interest_tags: lowerList(a.broader_interest_tags, 3),
       reason: typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
     }))
-    .slice(0, 24);
+    .slice(0, 40);
 }
 
 interface TopicIn {
@@ -112,11 +112,17 @@ interface TopicIn {
 
 function buildUserMessage(body: {
   topics: TopicIn[];
+  transcript?: string;
   languages?: string[];
   availability_hints?: string[];
   minor_interests?: string[];
 }): string {
   const lines: string[] = [];
+  if (body.transcript?.trim()) {
+    lines.push("Original voice transcript:");
+    lines.push(body.transcript.trim());
+    lines.push("");
+  }
   lines.push("Topics the user cares about:");
   body.topics.forEach((t, i) => {
     lines.push(
@@ -154,6 +160,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     topics?: unknown;
+    transcript?: unknown;
     languages?: unknown;
     availability_hints?: unknown;
     minor_interests?: unknown;
@@ -173,7 +180,7 @@ export async function POST(req: NextRequest) {
             typeof t.explanation === "string" ? t.explanation : "",
           tags: lowerList(t.tags, 5),
         }))
-        .slice(0, 24)
+        .slice(0, 40)
     : [];
 
   if (topics.length === 0) {
@@ -183,8 +190,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const transcript =
+    typeof body.transcript === "string" ? body.transcript.trim() : undefined;
+
   const userMessage = buildUserMessage({
     topics,
+    transcript,
     languages: Array.isArray(body.languages)
       ? (body.languages as unknown[]).map((x) => String(x)).slice(0, 6)
       : undefined,

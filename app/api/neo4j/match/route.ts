@@ -86,7 +86,8 @@ WITH u, interest_score, paths,
        WHEN (u)-[:AVAILABLE_AT]->(:TimeSlot {id: 'flexible'})                                    THEN 10
        ELSE -15
      END AS availability_score,
-     CASE WHEN langHits > 0 THEN 15 ELSE -10 END AS language_score,
+     CASE WHEN toLower(coalesce(a.language, '')) IN ['flexible', ''] THEN 0
+          WHEN langHits > 0 THEN 15 ELSE -10 END AS language_score,
      CASE WHEN u.commitment_appetite IN ['try-once','maybe-weekly'] THEN 6 ELSE 0 END AS commitment_score,
      CASE WHEN u.neighbourhood = a.location_area THEN 4 ELSE 0 END AS location_score,
      CASE WHEN prefHits > 0 THEN 10 ELSE 0 END AS preference_score

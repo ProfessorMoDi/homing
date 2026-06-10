@@ -9,7 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type { Activity, Topic } from "./types";
+import type {
+  Activity,
+  ImplicitPreference,
+  LanguageConfidence,
+  ProfileMissingField,
+  Topic,
+} from "./types";
 import {
   defaultCatanActivity,
   getAcceptedParticipants,
@@ -45,9 +51,19 @@ import {
 import { currentUserContext, DEMO_ID, type UserContext } from "./currentUser";
 import { isCollect, isDemo } from "./appMode";
 import {
+  runVoicePipeline,
+  type PipelineStage,
+  type SimilarPerson,
+} from "./voicePipeline";
+import { takeAudio } from "./audioStash";
+import {
+  mirrorUserGraph,
+  snapshotFromState,
+  type GraphMirrorSnapshot,
+} from "./graphMirror";
+import {
   fillSignupGaps,
   pickArchetype,
-  postcodeToNeighbourhood,
   TRANSCRIPT_VARIANTS,
   type Archetype,
 } from "./archetypes";
@@ -69,10 +85,19 @@ interface Signup {
 interface State {
   signup: Signup;
   transcript: string;
+  detectedLanguage: string | null;
+  companionReflection: string;
+  matchingNotes: string;
+  implicitPreferences: ImplicitPreference[];
+  missingFields: ProfileMissingField[];
+  languageConfidence: LanguageConfidence;
   topics: Topic[];
   minorInterests: string[];
   activityTypes: string[];
   suggestedActivities: Activity[];
+  pipelineStage: PipelineStage;
+  pipelineError: string | null;
+  similarPeople: SimilarPerson[];
   activity: Activity;
   inviteResponses: Record<string, "pending" | "accepted" | "declined" | "rescheduled">;
   verified: string[];
@@ -99,10 +124,19 @@ const initialState: State = {
     commitment: "",
   },
   transcript: "",
+  detectedLanguage: null,
+  companionReflection: "",
+  matchingNotes: "",
+  implicitPreferences: [],
+  missingFields: [],
+  languageConfidence: "none",
   topics: [],
   minorInterests: [],
   activityTypes: [],
   suggestedActivities: [],
+  pipelineStage: "idle",
+  pipelineError: null,
+  similarPeople: [],
   activity: defaultCatanActivity,
   inviteResponses: {},
   verified: [],
@@ -122,16 +156,23 @@ interface SuggestedActivity {
   energy_level: string;
   specific_interest_tags: string[];
   broader_interest_tags: string[];
+  linked_topic_title?: string;
   reason: string;
 }
 
 interface LiveProfile {
-  topics: { title: string; explanation: string; tags: string[] }[];
+  topics: { title: string; explanation: string; tags: string[]; quote?: string }[];
   minor_interests: string[];
   languages: string[];
+  language_confidence?: LanguageConfidence;
   activity_types: string[];
   availability?: string[];
   commitment?: string;
+  implicit_preferences?: ImplicitPreference[];
+  companion_reflection?: string;
+  matching_notes?: string;
+  missing_fields?: ProfileMissingField[];
+  detected_language?: string | null;
   activities: SuggestedActivity[];
 }
 
@@ -166,7 +207,13 @@ function deriveSignupFromProfile(
   profile: LiveProfile,
 ): Partial<Signup> {
   const patch: Partial<Signup> = {};
-  if (!current.languages_comfortable.length && profile.languages.length) {
+  const missing = new Set(profile.missing_fields ?? []);
+  const langOk =
+    profile.language_confidence === "high" &&
+    profile.languages.length > 0 &&
+    !missing.has("languages_comfortable");
+
+  if (!current.languages_comfortable.length && langOk) {
     const { list, other } = mapLanguages(profile.languages);
     if (list.length) {
       patch.languages_comfortable = list;
@@ -174,10 +221,18 @@ function deriveSignupFromProfile(
       if (other && !current.language_other) patch.language_other = other;
     }
   }
-  if (!current.availability.length && profile.availability?.length) {
+  if (
+    !current.availability.length &&
+    profile.availability?.length &&
+    !missing.has("availability")
+  ) {
     patch.availability = profile.availability;
   }
-  if (!current.commitment && profile.commitment) {
+  if (
+    !current.commitment &&
+    profile.commitment &&
+    !missing.has("commitment")
+  ) {
     patch.commitment = profile.commitment;
   }
   return patch;
@@ -210,9 +265,9 @@ function suggestedToActivity(
     exact_venue: s.exact_venue,
     group_size_target: s.group_size_target,
     minimum_group_size: Math.max(2, s.group_size_target - 1),
-    language: s.language,
+    language: s.language || "Flexible",
     energy_level: s.energy_level,
-    note: s.description,
+    note: s.reason || s.description,
     status: "suggested",
   };
 }
@@ -221,13 +276,18 @@ interface Ctx {
   state: State;
   setSignup: (patch: Partial<Signup>) => void;
   /** Write the validated signup to Neo4j once, on Continue (not while typing). */
-  commitSignup: () => void;
+  commitSignup: (opts?: { profileCompleted?: boolean }) => void;
+  /** Full User + VoiceProfile + LIKES sync — awaited before match-live. */
+  flushGraphMirror: (opts?: { profileCompleted?: boolean }) => Promise<void>;
+  /** Re-query match-live after profile fields land in the graph. */
+  refreshSimilarPeople: () => Promise<void>;
   loadSampleVoice: () => void;
   /** Random archetype + transcript variant for skip paths. Patches only empty signup fields. */
   loadRandomArchetype: () => void;
   /** Patch only the still-empty signup fields with a random archetype. */
   fillSignupRandom: () => void;
   setLiveTranscript: (transcript: string) => void;
+  setDetectedLanguage: (language: string | null) => void;
   setLiveProfile: (transcript: string, profile: LiveProfile) => void;
   setSuggestedActivities: (suggestions: SuggestedActivity[]) => void;
   updateTopic: (id: string, patch: Partial<Topic>) => void;
@@ -255,6 +315,12 @@ interface Ctx {
   /** Leave the named group — drops the MEMBER_OF edge for current user. */
   leaveRecurringGroup: (groupId: string) => void;
   resetDemo: () => void;
+  pipelineStage: PipelineStage;
+  pipelineError: string | null;
+  similarPeople: SimilarPerson[];
+  startVoicePipeline: (blob: Blob) => void;
+  retryPipeline: () => void;
+  clearVoiceDerivedState: () => void;
   /** True once localStorage has been read into state — gates one-shot snapshots. */
   hydrated: boolean;
 }
@@ -277,6 +343,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // during rehydration with any activities loaded from localStorage so a
   // page reload doesn't trigger a wave of API calls on the start page.
   const syncedRef = useRef<Set<string>>(new Set());
+  const pipelineAbortRef = useRef<AbortController | null>(null);
+  const lastPipelineBlobRef = useRef<Blob | null>(null);
+  const signupRef = useRef(state.signup);
+  signupRef.current = state.signup;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const readGraphSnapshot = useCallback((): GraphMirrorSnapshot => {
+    return snapshotFromState(stateRef.current);
+  }, []);
+
+  const flushGraphMirror = useCallback(
+    async (opts?: { profileCompleted?: boolean }) => {
+      await mirrorUserGraph(readGraphSnapshot(), opts);
+    },
+    [readGraphSnapshot],
+  );
+
+  const refreshSimilarPeople = useCallback(async () => {
+    const snap = readGraphSnapshot();
+    const topicTags = snap.topics
+      .filter((t) => !t.hidden)
+      .flatMap((t) => [t.title, ...t.tags]);
+    if (topicTags.length === 0) return;
+    const selfId = currentUserContext(snap.signup).id;
+    const people = await fetchLiveMatch(topicTags, selfId);
+    if (people) {
+      setState((s) => ({
+        ...s,
+        similarPeople: people.slice(0, 5).map((p) => ({
+          user_id: p.user_id,
+          first_name: p.first_name,
+          neighbourhood: p.neighbourhood,
+          score: p.score,
+          reasons: p.reasons,
+        })),
+      }));
+    }
+  }, [readGraphSnapshot]);
 
   useEffect(() => {
     try {
@@ -393,23 +498,134 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(handle);
   }, [hydrated, state.activity, refreshMatches]);
 
-  // Mirror voice transcript → VoiceProfile. Fires once per distinct
-  // non-empty transcript value. Sample / live source inferred from the
-  // demo flag on the current user context.
+  // Mirror voice analysis → VoiceProfile. Fires when transcript or any
+  // analysis field changes. Sample / live source inferred from demo flag.
   const voiceSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!hydrated) return;
     const t = state.transcript;
-    if (!t || voiceSyncedRef.current === t) return;
-    voiceSyncedRef.current = t;
+    if (!t) return;
+    const sig = JSON.stringify({
+      t,
+      lang: state.detectedLanguage,
+      langConf: state.languageConfidence,
+      notes: state.matchingNotes,
+      reflection: state.companionReflection,
+      implicit: state.implicitPreferences,
+      minor: state.minorInterests,
+      activityTypes: state.activityTypes,
+      availability: state.signup.availability,
+      languages: state.signup.languages_comfortable,
+    });
+    if (voiceSyncedRef.current === sig) return;
+    voiceSyncedRef.current = sig;
     const ctx = currentUserContext(state.signup);
     syncVoice({
       user_id: ctx.id,
       transcript: t,
       source: ctx.demo ? "sample" : "live",
+      language: state.detectedLanguage ?? undefined,
+      language_confidence: state.languageConfidence,
+      matching_notes: state.matchingNotes || undefined,
+      companion_reflection: state.companionReflection || undefined,
+      implicit_preferences: state.implicitPreferences.length
+        ? state.implicitPreferences
+        : undefined,
+      languages_mentioned: state.signup.languages_comfortable.length
+        ? state.signup.languages_comfortable
+        : undefined,
+      minor_interests: state.minorInterests.length ? state.minorInterests : undefined,
+      activity_types: state.activityTypes.length ? state.activityTypes : undefined,
+      availability_hints: state.signup.availability.length
+        ? state.signup.availability
+        : undefined,
+      commitment_appetite: state.signup.commitment || undefined,
       demo: ctx.demo,
     });
-  }, [hydrated, state.transcript, state.signup]);
+  }, [
+    hydrated,
+    state.transcript,
+    state.detectedLanguage,
+    state.languageConfidence,
+    state.matchingNotes,
+    state.companionReflection,
+    state.implicitPreferences,
+    state.minorInterests,
+    state.activityTypes,
+    state.signup,
+  ]);
+
+  // Mirror voice-inferred signup fields → User (languages, availability,
+  // commitment). Runs after analysis fills gaps; commitSignup still handles
+  // the explicit form Continue tap.
+  const voiceSignupSyncedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hydrated || !state.transcript) return;
+    const ctx = currentUserContext(state.signup);
+    const patch = {
+      languages_spoken: state.signup.languages_spoken,
+      languages_comfortable: state.signup.languages_comfortable,
+      availability: state.signup.availability,
+      commitment: state.signup.commitment,
+    };
+    const sig = JSON.stringify(patch);
+    if (voiceSignupSyncedRef.current === sig) return;
+    const hasData =
+      patch.languages_comfortable.length > 0 ||
+      patch.availability.length > 0 ||
+      !!patch.commitment;
+    if (!hasData) return;
+    voiceSignupSyncedRef.current = sig;
+    syncSignup({
+      id: ctx.id,
+      demo: ctx.demo,
+      languages_spoken: patch.languages_spoken.length
+        ? patch.languages_spoken
+        : undefined,
+      languages_comfortable: patch.languages_comfortable.length
+        ? patch.languages_comfortable
+        : undefined,
+      availability: patch.availability.length ? patch.availability : undefined,
+      commitment_appetite: patch.commitment || undefined,
+    });
+  }, [
+    hydrated,
+    state.transcript,
+    state.signup.languages_spoken,
+    state.signup.languages_comfortable,
+    state.signup.availability,
+    state.signup.commitment,
+    state.signup,
+  ]);
+
+  // Mirror profile answers into Neo4j as the user fills them after voice.
+  useEffect(() => {
+    if (!hydrated || !state.transcript) return;
+    const { gender, postcode, gender_pref, commitment } = state.signup;
+    const hasMirrorable =
+      !!gender ||
+      postcode.trim().length >= 3 ||
+      !!gender_pref ||
+      !!commitment ||
+      state.signup.languages_comfortable.length > 0 ||
+      state.signup.availability.length > 0;
+    if (!hasMirrorable) return;
+    const handle = setTimeout(() => {
+      void flushGraphMirror();
+    }, 450);
+    return () => clearTimeout(handle);
+  }, [
+    hydrated,
+    state.transcript,
+    state.signup.gender,
+    state.signup.gender_pref,
+    state.signup.postcode,
+    state.signup.languages_comfortable,
+    state.signup.languages_spoken,
+    state.signup.availability,
+    state.signup.commitment,
+    flushGraphMirror,
+  ]);
 
   // Mirror topics → LIKES edges. Debounced 400ms so rapid topic edits in
   // /themes don't trigger N round-trips.
@@ -417,25 +633,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     const visible = state.topics.filter((t) => !t.hidden);
-    if (visible.length === 0) return;
+    if (visible.length === 0 && state.minorInterests.length === 0) return;
     const ctx = currentUserContext(state.signup);
-    const sig = JSON.stringify(visible.map((t) => ({ id: t.id, title: t.title, hidden: t.hidden })));
+    const sig = JSON.stringify({
+      topics: visible.map((t) => ({ id: t.id, title: t.title, hidden: t.hidden })),
+      minor: state.minorInterests,
+    });
     if (interestsSyncedRef.current === sig) return;
     const handle = setTimeout(() => {
       interestsSyncedRef.current = sig;
       syncInterests({
         user_id: ctx.id,
         demo: ctx.demo,
-        topics: state.topics.map((t) => ({
-          title: t.title,
-          weight: t.hidden ? 0 : 1,
-          source: "voice-analysis",
-          hidden: !!t.hidden,
-        })),
+        topics: [
+          ...state.topics.map((t) => ({
+            title: t.title,
+            weight: t.hidden ? 0 : 1,
+            source: "voice-analysis" as const,
+            hidden: !!t.hidden,
+          })),
+          ...state.minorInterests.map((title) => ({
+            title,
+            weight: 0.5,
+            source: "voice-analysis" as const,
+          })),
+        ],
       });
     }, 400);
     return () => clearTimeout(handle);
-  }, [hydrated, state.topics, state.signup]);
+  }, [hydrated, state.topics, state.minorInterests, state.signup]);
 
   const setSignup = useCallback((patch: Partial<Signup>) => {
     setState((s) => ({ ...s, signup: { ...s.signup, ...patch } }));
@@ -445,31 +671,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // user types — the User node is created only when they tap "Continue" on a
   // validated form (the page-level canContinue gate runs before this fires).
   // Reads the latest signup via a setState snapshot to avoid stale closures.
-  const commitSignup = useCallback(() => {
-    let snap: { sig: Signup; ctx: UserContext } | null = null;
-    setState((s) => {
-      snap = { sig: s.signup, ctx: currentUserContext(s.signup) };
-      return s;
-    });
-    if (!snap) return;
-    const { sig, ctx } = snap as { sig: Signup; ctx: UserContext };
-    syncSignup({
-      id: ctx.id,
-      demo: ctx.demo,
-      first_name: sig.first_name || undefined,
-      email: sig.email || undefined,
-      age: sig.age ?? undefined,
-      gender: sig.gender || undefined,
-      gender_preference: sig.gender_pref || undefined,
-      postcode: sig.postcode || undefined,
-      neighbourhood: postcodeToNeighbourhood(sig.postcode),
-      language_other: sig.language_other || undefined,
-      commitment_appetite: sig.commitment || undefined,
-      languages_spoken: sig.languages_spoken.length ? sig.languages_spoken : undefined,
-      languages_comfortable: sig.languages_comfortable.length ? sig.languages_comfortable : undefined,
-      availability: sig.availability.length ? sig.availability : undefined,
-    });
-  }, []);
+  const commitSignup = useCallback(
+    (opts?: { profileCompleted?: boolean }) => {
+      void flushGraphMirror(opts);
+    },
+    [flushGraphMirror],
+  );
 
   const loadSampleVoice = useCallback(() => {
     const creatorId = currentUserContext(state.signup).id;
@@ -551,12 +758,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...s,
       transcript,
       topics: extracted.topics,
-      minorInterests:
-        extracted.minorInterests.length > 0
-          ? extracted.minorInterests
-          : [...sampleMinorInterests].slice(0, 3),
-      activityTypes: [...sampleActivityTypes],
+      minorInterests: extracted.minorInterests,
+      activityTypes: [],
     }));
+  }, []);
+
+  const setDetectedLanguage = useCallback((language: string | null) => {
+    setState((s) => ({ ...s, detectedLanguage: language }));
   }, []);
 
   const setLiveProfile = useCallback(
@@ -568,21 +776,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({
         ...s,
         transcript,
+        detectedLanguage: profile.detected_language ?? s.detectedLanguage,
+        companionReflection: profile.companion_reflection ?? "",
+        matchingNotes: profile.matching_notes ?? "",
+        implicitPreferences: profile.implicit_preferences ?? [],
+        missingFields: profile.missing_fields ?? [],
+        languageConfidence: profile.language_confidence ?? "none",
         signup: { ...s.signup, ...deriveSignupFromProfile(s.signup, profile) },
         topics: profile.topics.map((t, i) => ({
           id: `t_ai_${i}`,
           title: t.title,
           explanation: t.explanation,
           tags: t.tags,
+          quote: t.quote,
         })),
-        minorInterests:
-          profile.minor_interests.length > 0
-            ? profile.minor_interests
-            : [...sampleMinorInterests].slice(0, 3),
-        activityTypes:
-          profile.activity_types.length > 0
-            ? profile.activity_types
-            : [...sampleActivityTypes],
+        minorInterests: profile.minor_interests,
+        activityTypes: profile.activity_types,
         suggestedActivities: generatedActivities,
       }));
     },
@@ -591,17 +800,140 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setSuggestedActivities = useCallback(
     (suggestions: SuggestedActivity[]) => {
-      const creatorId = currentUserContext(state.signup).id;
-      const mapped = suggestions.map((s, i) =>
-        suggestedToActivity(s, i, creatorId),
-      );
-      setState((s) => ({
-        ...s,
-        suggestedActivities: mapped,
-      }));
+      setState((s) => {
+        const creatorId = currentUserContext(s.signup).id;
+        const mapped = suggestions.map((item, i) =>
+          suggestedToActivity(item, i, creatorId),
+        );
+        return { ...s, suggestedActivities: mapped };
+      });
     },
-    [state.signup],
+    [],
   );
+
+  const clearVoiceDerivedState = useCallback(() => {
+    pipelineAbortRef.current?.abort();
+    pipelineAbortRef.current = null;
+    lastPipelineBlobRef.current = null;
+    setState((s) => ({
+      ...s,
+      transcript: "",
+      detectedLanguage: null,
+      companionReflection: "",
+      matchingNotes: "",
+      implicitPreferences: [],
+      missingFields: [],
+      languageConfidence: "none",
+      topics: [],
+      minorInterests: [],
+      activityTypes: [],
+      suggestedActivities: [],
+      pipelineStage: "idle",
+      pipelineError: null,
+      similarPeople: [],
+    }));
+  }, []);
+
+  const startVoicePipeline = useCallback((blob: Blob) => {
+    pipelineAbortRef.current?.abort();
+    const ac = new AbortController();
+    pipelineAbortRef.current = ac;
+    lastPipelineBlobRef.current = blob;
+
+    setState((s) => ({
+      ...s,
+      pipelineStage: "transcribing",
+      pipelineError: null,
+      similarPeople: [],
+    }));
+
+    void runVoicePipeline(
+      blob,
+      {
+        onStage: (stage) => {
+          setState((s) => ({ ...s, pipelineStage: stage }));
+        },
+        onTranscriptSeed: (transcript) => {
+          setState((s) => ({ ...s, transcript }));
+        },
+        onDetectedLanguage: (language) => {
+          setState((s) => ({ ...s, detectedLanguage: language }));
+        },
+        onUnderstand: (transcript, data) => {
+          const profile: LiveProfile = {
+            topics: data.topics,
+            minor_interests: data.minor_interests ?? [],
+            languages: data.languages ?? [],
+            language_confidence:
+              (data.language_confidence as LanguageConfidence) ?? "none",
+            activity_types: data.activity_types ?? [],
+            availability: data.availability,
+            commitment: data.commitment,
+            implicit_preferences: (data.implicit_preferences ??
+              []) as ImplicitPreference[],
+            companion_reflection: data.companion_reflection,
+            matching_notes: data.matching_notes,
+            missing_fields: (data.missing_fields ??
+              []) as ProfileMissingField[],
+            detected_language: data.detected_language,
+            activities: [],
+          };
+          setState((s) => ({
+              ...s,
+              transcript,
+              detectedLanguage:
+                profile.detected_language ?? s.detectedLanguage,
+              companionReflection: profile.companion_reflection ?? "",
+              matchingNotes: profile.matching_notes ?? "",
+              implicitPreferences: profile.implicit_preferences ?? [],
+              missingFields: profile.missing_fields ?? [],
+              languageConfidence: profile.language_confidence ?? "none",
+              signup: {
+                ...s.signup,
+                ...deriveSignupFromProfile(s.signup, profile),
+              },
+              topics: profile.topics.map((t, i) => ({
+                id: `t_ai_${i}`,
+                title: t.title,
+                explanation: t.explanation,
+                tags: t.tags,
+                quote: t.quote,
+              })),
+              minorInterests: profile.minor_interests,
+              activityTypes: profile.activity_types,
+          }));
+        },
+        onActivities: (activities) => {
+          setSuggestedActivities(activities);
+        },
+        onSimilarPeople: (people) => {
+          setState((s) => ({ ...s, similarPeople: people }));
+        },
+        onError: (message) => {
+          setState((s) => ({
+            ...s,
+            pipelineError: message,
+            pipelineStage: "error",
+          }));
+        },
+      },
+      {
+        skipActivities: isCollect(),
+        selfId: currentUserContext(signupRef.current).id,
+        signal: ac.signal,
+        beforePeopleMatch: async () => {
+          await new Promise((r) => setTimeout(r, 50));
+          await flushGraphMirror();
+        },
+      },
+    );
+  }, [setSuggestedActivities, flushGraphMirror]);
+
+  const retryPipeline = useCallback(() => {
+    const blob =
+      lastPipelineBlobRef.current ?? takeAudio()?.blob ?? null;
+    if (blob) startVoicePipeline(blob);
+  }, [startVoicePipeline]);
 
   const updateTopic = useCallback((id: string, patch: Partial<Topic>) => {
     setState((s) => ({
@@ -891,10 +1223,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     state,
     setSignup,
     commitSignup,
+    flushGraphMirror,
+    refreshSimilarPeople,
     loadSampleVoice,
     loadRandomArchetype,
     fillSignupRandom,
     setLiveTranscript,
+    setDetectedLanguage,
     setLiveProfile,
     setSuggestedActivities,
     updateTopic,
@@ -914,6 +1249,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     createRecurringGroup,
     leaveRecurringGroup,
     resetDemo,
+    pipelineStage: state.pipelineStage,
+    pipelineError: state.pipelineError,
+    similarPeople: state.similarPeople,
+    startVoicePipeline,
+    retryPipeline,
+    clearVoiceDerivedState,
     hydrated,
   };
 

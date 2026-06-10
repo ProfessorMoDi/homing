@@ -19,7 +19,8 @@ function format(secs: number) {
 
 export default function VoiceOnboarding() {
   const router = useRouter();
-  const { loadSampleVoice } = useApp();
+  const { loadSampleVoice, startVoicePipeline, clearVoiceDerivedState } =
+    useApp();
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +127,7 @@ export default function VoiceOnboarding() {
     };
   }, [recording]);
 
-  const doneEnabled = seconds >= 60;
+  const doneEnabled = seconds >= 25;
   const skipEnabled = recording && seconds >= 1;
   // Skip-90s and the canned sample profile are flow shortcuts for the demo /
   // full builds. The normal/collect build real users get is clean.
@@ -135,17 +136,21 @@ export default function VoiceOnboarding() {
   async function onStart() {
     if (recording) return;
     setError(null);
+    clearVoiceDerivedState();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
       const mimeType =
         typeof MediaRecorder !== "undefined" &&
-        MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : undefined;
+        MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : typeof MediaRecorder !== "undefined" &&
+              MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : undefined;
       const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
+        ? new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128_000 })
         : new MediaRecorder(stream);
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -157,7 +162,7 @@ export default function VoiceOnboarding() {
         setRecording(false);
       };
       recorderRef.current = recorder;
-      recorder.start();
+      recorder.start(1000);
       setRecording(true);
     } catch (e) {
       console.error(e);
@@ -203,8 +208,14 @@ export default function VoiceOnboarding() {
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
+    if (seconds < 15) {
+      setError(
+        "That was quite short — results may be thinner. For best results, aim for 30 seconds next time.",
+      );
+    }
     stashAudio(blob, force);
-    router.push("/transcribing?live=1");
+    startVoicePipeline(blob);
+    router.push("/signup/details?fromVoice=1");
   }
 
   function onSample() {
@@ -215,7 +226,7 @@ export default function VoiceOnboarding() {
   return (
     <AppShell back="/signup" title="Voice onboarding">
       <p className="text-[14px] text-[var(--color-ink-soft)] mb-3 text-center">
-        Talk for about a minute.
+        Aim for about 30 seconds — say several interests.
       </p>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-3 text-center px-2">
         Tell us what you&apos;ve been into lately, what you wish you did more
@@ -282,7 +293,7 @@ export default function VoiceOnboarding() {
 
         {!doneEnabled && recording && (
           <p className="text-[12px] text-[var(--color-muted)]">
-            Done unlocks after 60 seconds
+            Done unlocks after 25 seconds
           </p>
         )}
       </div>
@@ -310,7 +321,7 @@ export default function VoiceOnboarding() {
               disabled={!skipEnabled}
             >
               <FastForward size={14} />
-              Done now (demo · skip 60s)
+              Done now (demo · skip wait)
             </button>
             <SecondaryButton onClick={onSample}>
               <Sparkles size={16} />

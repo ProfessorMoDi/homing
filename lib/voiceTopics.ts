@@ -176,7 +176,7 @@ export function extractFromTranscript(transcript: string): ExtractedProfile {
     keys.some((k) => lower.includes(k.toLowerCase())),
   );
 
-  const topics: Topic[] = hits.slice(0, 6).map((h, i) => ({
+  const topics: Topic[] = hits.slice(0, 24).map((h, i) => ({
     id: `t_live_${i}`,
     title: h.topic.title,
     explanation: h.topic.explanation,

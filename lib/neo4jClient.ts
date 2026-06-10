@@ -28,6 +28,7 @@ export interface SignupSync {
   languages_spoken?: string[];
   languages_comfortable?: string[];
   availability?: string[];
+  profile_completed?: boolean;
 }
 
 export async function syncSignup(patch: SignupSync): Promise<void> {
@@ -48,6 +49,15 @@ export interface VoiceSync {
   transcript: string;
   source: "live" | "sample";
   language?: string;
+  language_confidence?: string;
+  matching_notes?: string;
+  companion_reflection?: string;
+  implicit_preferences?: Array<{ phrase: string; evidence_quote?: string }>;
+  languages_mentioned?: string[];
+  minor_interests?: string[];
+  activity_types?: string[];
+  availability_hints?: string[];
+  commitment_appetite?: string;
   demo: boolean;
 }
 

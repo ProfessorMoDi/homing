@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
+import { pipelineStageLabel } from "@/lib/voicePipeline";
 
 const GENDER = [
   ["male", "Male"],
@@ -132,17 +133,14 @@ const QUESTIONS: Record<FieldKey, Question> = {
   },
 };
 
-// Kept deliberately short — this is a send-to-friends data-collection flow, so
-// every extra question costs completion. gender_preference (matching-only) is
-// dropped, and a single "comfortable in" languages question also fills the
-// "spoken" set behind the scenes.
-const ORDER: FieldKey[] = [
-  "gender",
-  "postcode",
-  "languages_comfortable",
-  "availability",
-  "commitment",
-];
+function profileQuestionOrder(missingFields: string[]): FieldKey[] {
+  const order: FieldKey[] = ["gender", "gender_pref", "postcode"];
+  if (missingFields.includes("languages_comfortable")) {
+    order.push("languages_comfortable");
+  }
+  order.push("availability", "commitment");
+  return order;
+}
 
 function isDone(key: FieldKey, s: Signup): boolean {
   switch (key) {
@@ -172,21 +170,46 @@ function isDone(key: FieldKey, s: Signup): boolean {
   }
 }
 
-export default function SignUpDetails() {
-  const { state, setSignup, commitSignup, fillSignupRandom, hydrated } = useApp();
+export default function SignUpDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell back="/voice" title="Quick profile">
+          <div className="flex items-center justify-center min-h-[40dvh] text-[13px] text-[var(--color-muted)]">
+            Loading…
+          </div>
+        </AppShell>
+      }
+    >
+      <SignUpDetails />
+    </Suspense>
+  );
+}
+
+function SignUpDetails() {
+  const {
+    state,
+    setSignup,
+    commitSignup,
+    flushGraphMirror,
+    refreshSimilarPeople,
+    fillSignupRandom,
+    hydrated,
+    pipelineStage,
+    pipelineError,
+    retryPipeline,
+  } = useApp();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromVoice = searchParams.get("fromVoice") === "1";
   const s = state.signup;
 
-  // Snapshot the missing questions once — but only after the store has
-  // hydrated from localStorage, otherwise a direct load / refresh would
-  // snapshot the empty initial state and show questions the voice pass already
-  // answered. Null until ready so we can show a brief loader.
-  const [steps, setSteps] = useState<FieldKey[] | null>(null);
-  useEffect(() => {
-    if (hydrated && steps === null) {
-      setSteps(ORDER.filter((k) => !isDone(k, state.signup)));
-    }
-  }, [hydrated, steps, state.signup]);
+  const steps = useMemo(() => {
+    if (!hydrated) return null;
+    return profileQuestionOrder(state.missingFields).filter(
+      (k) => !isDone(k, state.signup),
+    );
+  }, [hydrated, state.signup, state.missingFields]);
   const [idx, setIdx] = useState(0);
   const [attempted, setAttempted] = useState(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,12 +222,24 @@ export default function SignUpDetails() {
   // Recomputed once hydration lands so it reflects the real pre-filled values.
   const heard = useMemo(() => {
     const items: string[] = [];
+    const topicTitles = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => t.title);
+    if (topicTitles.length > 0) {
+      const shown =
+        topicTitles.length > 6
+          ? `${topicTitles.slice(0, 6).join(", ")} +${topicTitles.length - 6} more`
+          : topicTitles.join(", ");
+      items.push(`Interests · ${shown}`);
+    }
     if (s.languages_comfortable.length)
       items.push(
         `Languages · ${s.languages_comfortable
           .map((l) => (l === "Other" ? s.language_other || "Other" : l))
           .join(", ")}`,
       );
+    else if (state.missingFields.includes("languages_comfortable"))
+      items.push("Languages · not clear from recording — pick below");
     if (s.availability.length)
       items.push(
         `Availability · ${s.availability.map((a) => LABELS[a] ?? a).join(", ")}`,
@@ -212,7 +247,7 @@ export default function SignUpDetails() {
     if (s.commitment) items.push(`Rhythm · ${LABELS[s.commitment] ?? s.commitment}`);
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, state.topics, state.missingFields]);
 
   const toggleArr = (arr: string[], key: string) =>
     arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key];
@@ -221,11 +256,13 @@ export default function SignUpDetails() {
   // user lands on the "you're in the flock" screen. The full build continues
   // into the activity-suggestion flow.
   const mode = useAppMode();
-  const nextAfterProfile = mode === "collect" ? "/collect/done" : "/suggestions";
-  const finishLabel = mode === "collect" ? "Join the flock" : "See your activities";
+  const nextAfterProfile = mode === "collect" ? "/collect/done" : "/themes";
+  const finishLabel =
+    mode === "collect" ? "Join the flock" : "Review your interests";
 
-  function finish() {
-    commitSignup();
+  async function finish() {
+    await flushGraphMirror({ profileCompleted: true });
+    void refreshSimilarPeople();
     router.push(nextAfterProfile);
   }
 
@@ -239,7 +276,7 @@ export default function SignUpDetails() {
     if (advanceTimer.current) clearTimeout(advanceTimer.current);
     setAttempted(false);
     if (idx > 0) setIdx((i) => i - 1);
-    else router.push("/themes");
+    else router.push(fromVoice ? "/voice" : "/themes");
   }
 
   function onSingle(key: FieldKey, value: string) {
@@ -261,11 +298,10 @@ export default function SignUpDetails() {
     goNext();
   }
 
-  function useSampleDetails() {
+  async function useSampleDetails() {
     fillSignupRandom();
-    // commitSignup snapshots the freshest state, so the archetype patch above
-    // is included even though setState hasn't flushed yet.
-    commitSignup();
+    await flushGraphMirror({ profileCompleted: true });
+    void refreshSimilarPeople();
     router.push(nextAfterProfile);
   }
 
@@ -336,8 +372,53 @@ export default function SignUpDetails() {
     q.key === "languages_comfortable" &&
     s.languages_comfortable.includes("Other");
 
+  const processing =
+    pipelineStage !== "idle" &&
+    pipelineStage !== "ready" &&
+    pipelineStage !== "error";
+
   return (
-    <AppShell back="/themes" title="Quick profile">
+    <AppShell back={fromVoice ? "/voice" : "/themes"} title="Quick profile">
+      {(processing || pipelineStage === "ready" || pipelineError) && (
+        <div
+          className={
+            "card-outline p-3.5 mb-5 flex items-start gap-2.5 " +
+            (pipelineError
+              ? "border-[var(--color-clay)]"
+              : "border-[var(--color-sage)]/30")
+          }
+        >
+          <span className="grid place-items-center h-7 w-7 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+            <Sparkles size={14} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12.5px] font-medium text-[var(--color-ink)]">
+              {pipelineError
+                ? "Homi hit a snag"
+                : pipelineStageLabel(pipelineStage)}
+            </p>
+            {pipelineError ? (
+              <p className="text-[12px] text-[var(--color-muted)] mt-0.5 leading-relaxed">
+                {pipelineError}
+              </p>
+            ) : (
+              <p className="text-[12px] text-[var(--color-muted)] mt-0.5">
+                Keep answering below — no need to wait.
+              </p>
+            )}
+          </div>
+          {pipelineError && (
+            <button
+              type="button"
+              onClick={retryPipeline}
+              className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Progress: in-flow back + segmented dots + counter */}
       <div className="flex items-center gap-3 mb-7">
         <button
@@ -492,7 +573,7 @@ export default function SignUpDetails() {
         </div>
       )}
 
-      {mode !== "collect" && (
+      {mode === "demo" && (
         <div className="mt-3">
           <SecondaryButton onClick={useSampleDetails}>
             <Sparkles size={15} />

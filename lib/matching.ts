@@ -132,7 +132,9 @@ export function scoreUserForActivity(
   // 3. Language comfort
   const lang = activity.language.toLowerCase();
   const comfy = user.languages_comfortable.map((l) => l.toLowerCase());
-  if (comfy.includes(lang)) {
+  if (lang === "flexible" || !lang) {
+    // Unknown / any-language activities should not penalise candidates.
+  } else if (comfy.includes(lang)) {
     score += 15;
     reasons.push(`Comfortable in ${activity.language}`);
   } else {

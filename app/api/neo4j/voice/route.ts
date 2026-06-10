@@ -5,9 +5,10 @@ import { writeVoiceProfile, type VoiceProfilePayload } from "../../../../lib/neo
 export const runtime = "nodejs";
 export const maxDuration = 15;
 
-// Persist the user's recorded transcript as a VoiceProfile node and attach
-// it to the User via :RECORDED. 1:1 — re-recording replaces the prior
-// voice profile rather than accumulating.
+// Persist the user's voice analysis as a VoiceProfile node attached to the
+// User via :RECORDED. 1:1 — re-recording replaces the prior profile rather
+// than accumulating. Extended fields (matching_notes, implicit prefs, etc.)
+// land as node properties for future matching / explainability.
 
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => null)) as VoiceProfilePayload | null;

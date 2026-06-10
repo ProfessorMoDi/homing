@@ -180,11 +180,25 @@ export async function writeInterests(
 
 // ── Voice profile ─────────────────────────────────────────────────────────
 
+export interface ImplicitPreferencePayload {
+  phrase: string;
+  evidence_quote?: string;
+}
+
 export interface VoiceProfilePayload {
   user_id: string;
   transcript: string;
   source?: "live" | "sample";
   language?: string;
+  language_confidence?: string;
+  matching_notes?: string;
+  companion_reflection?: string;
+  implicit_preferences?: ImplicitPreferencePayload[];
+  languages_mentioned?: string[];
+  minor_interests?: string[];
+  activity_types?: string[];
+  availability_hints?: string[];
+  commitment_appetite?: string;
   demo?: boolean;
 }
 
@@ -194,6 +208,10 @@ export async function writeVoiceProfile(
 ): Promise<{ voice_id: string }> {
   const voiceId = `voice_${p.user_id}`;
   const now = new Date().toISOString();
+  const implicitJson =
+    p.implicit_preferences && p.implicit_preferences.length > 0
+      ? JSON.stringify(p.implicit_preferences)
+      : null;
 
   // 1:1 — replace any existing VoiceProfile for this user.
   await tx.run(
@@ -203,11 +221,20 @@ export async function writeVoiceProfile(
 
   await tx.run(
     `MERGE (v:VoiceProfile {id: $voiceId})
-       SET v.transcript  = $transcript,
-           v.source      = $source,
-           v.language    = $language,
-           v.recorded_at = $now,
-           v.user_id     = $userId${p.demo ? ", v.demo = true" : ""}
+       SET v.transcript            = $transcript,
+           v.source                = $source,
+           v.language              = $language,
+           v.language_confidence   = $languageConfidence,
+           v.matching_notes        = $matchingNotes,
+           v.companion_reflection  = $companionReflection,
+           v.implicit_preferences  = $implicitJson,
+           v.languages_mentioned   = $languagesMentioned,
+           v.minor_interests       = $minorInterests,
+           v.activity_types        = $activityTypes,
+           v.availability_hints    = $availabilityHints,
+           v.commitment_appetite   = $commitmentAppetite,
+           v.recorded_at           = $now,
+           v.user_id               = $userId${p.demo ? ", v.demo = true" : ""}
      WITH v
      MERGE (u:User {id: $userId})
      MERGE (u)-[r:RECORDED]->(v)
@@ -218,6 +245,15 @@ export async function writeVoiceProfile(
       transcript: p.transcript,
       source: p.source ?? "live",
       language: p.language ?? "en",
+      languageConfidence: p.language_confidence ?? null,
+      matchingNotes: p.matching_notes?.slice(0, 500) ?? null,
+      companionReflection: p.companion_reflection?.slice(0, 600) ?? null,
+      implicitJson,
+      languagesMentioned: p.languages_mentioned ?? [],
+      minorInterests: p.minor_interests ?? [],
+      activityTypes: p.activity_types ?? [],
+      availabilityHints: p.availability_hints ?? [],
+      commitmentAppetite: p.commitment_appetite ?? null,
       now,
     },
   );

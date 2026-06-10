@@ -55,8 +55,24 @@ export interface Topic {
   title: string;
   explanation: string;
   tags: string[];
+  quote?: string;
   hidden?: boolean;
 }
+
+export interface ImplicitPreference {
+  phrase: string;
+  evidence_quote?: string;
+}
+
+export type LanguageConfidence = "high" | "partial" | "none";
+
+export type ProfileMissingField =
+  | "languages_comfortable"
+  | "languages_spoken"
+  | "availability"
+  | "commitment"
+  | "gender"
+  | "postcode";
 
 export type ActivityStatus =
   | "suggested"
