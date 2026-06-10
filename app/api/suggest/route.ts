@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You generate 3 concrete activity suggestions for a young adult who is a student at Erasmus University Rotterdam (EUR). The output is for HOMING, an app that turns interests into small, low-pressure real-life activities. Output strict JSON.
+const SYSTEM_PROMPT = `You generate concrete activity suggestions for a young adult who is a student at Erasmus University Rotterdam (EUR). The output is for HOMING, an app that turns interests into small, low-pressure real-life activities. Output strict JSON.
 
 You'll receive a list of topics the user cares about (each with a title, explanation, and tags), plus their comfortable languages and availability hints.
 
-Output an object: { activities: [...] } containing exactly 3 items. Each activity is:
+Output an object: { activities: [...] }. Generate one or more grounded suggestions for AS MANY of their topics as you can — MORE IS BETTER. If they care about ten things, lean toward ten or more suggestions so they feel fully understood. Never invent a topic they didn't give. Each activity is:
 - title: action-oriented, 2–6 words (e.g. "Start a Catan round", "Slow Saturday photo walk", "Cook a new dish together")
 - description: one short sentence about what would happen
 - day: realistic day of week (e.g. "Thursday", "Saturday")
@@ -101,7 +101,7 @@ function coerceActivities(raw: unknown): SuggestedActivity[] {
       broader_interest_tags: lowerList(a.broader_interest_tags, 3),
       reason: typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
     }))
-    .slice(0, 3);
+    .slice(0, 24);
 }
 
 interface TopicIn {
@@ -137,7 +137,7 @@ function buildUserMessage(body: {
   }
   lines.push("");
   lines.push(
-    "Now generate exactly 3 activity suggestions grounded in these topics.",
+    "Now generate a grounded activity suggestion for as many of these topics as you can — more is better, cover everything they mentioned.",
   );
   return lines.join("\n");
 }
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
             typeof t.explanation === "string" ? t.explanation : "",
           tags: lowerList(t.tags, 5),
         }))
-        .slice(0, 10)
+        .slice(0, 24)
     : [];
 
   if (topics.length === 0) {

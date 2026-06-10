@@ -297,14 +297,14 @@ function RegenBadge({
         {status === "loading" && (
           <>
             <Sparkles size={12} className="animate-pulse" />
-            Homi is drafting 3 things you could actually do
+            Homi is drafting things you could actually do
             <ThinkingDots size="small" />
           </>
         )}
         {status === "ready" && (
           <>
             <Check size={12} strokeWidth={3} className="animate-pop-check" />
-            Homi has 3 fresh suggestions ready
+            Homi has fresh suggestions ready
           </>
         )}
         {status === "error" && (

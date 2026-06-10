@@ -3,27 +3,23 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const DEMO_PADDING = `
-Anyway, my Thursday evenings are usually free. I'm in Kralingen so anywhere
-near campus is easier. I'd rather keep it small, like four people, not a big
-event. English is fine, German also works for me. I'd want to start with
-something low-pressure — one round, see how it feels, and maybe make it a
-regular thing if it clicks. Honestly I'm just looking to actually do the
-stuff I already enjoy with other people, not plan it forever.
-`.trim();
-
 const SYSTEM_PROMPT = `You analyze a voice transcript from HOMING, an app that turns a young adult's interests into a small, low-pressure real-life activity in Rotterdam, Netherlands. The user is a student at Erasmus University Rotterdam (EUR).
 
 Return a strict JSON object with exactly these fields.
 
-1) topics — array of 3–8 main themes the speaker mentioned. Each item is an object:
+1) topics — EVERY distinct interest the speaker actually mentioned. Do NOT cap
+   this artificially — if they mention many things, return many (15–20+ is
+   completely fine). The user should feel that nothing they said was missed.
+   Each item is an object:
    - title: 1–4 word phrase (Title Case)
    - explanation: one short sentence paraphrasing what they said about it
    - tags: 2–5 lowercase keyword tags
 
    CRITICAL: One topic = one distinct, atomic concept. Do NOT bundle separable
    interests under a single topic. Each should stand on its own so it can be
-   independently kept, edited, or removed.
+   independently kept, edited, or removed. If they mention several varieties of
+   one thing — e.g. salsa AND bachata AND hip-hop dancing; or Korean AND Thai
+   food — make EACH variety its own topic. Never collapse them into one.
    - "Cooking" and "Asian food" are TWO topics. Cooking is a craft; Asian
      food is a cuisine. Someone who cooks may cook many cuisines.
    - "Running" and "morning routines" are TWO topics.
@@ -33,20 +29,36 @@ Return a strict JSON object with exactly these fields.
    - Each topic's tags should only describe THAT topic — never mix tags from
      other concepts.
 
-2) minor_interests — up to 5 short phrases capturing smaller details.
+2) minor_interests — up to 12 short phrases capturing every smaller detail,
+   preference, or constraint they mentioned (favourite spots, group-size
+   preference, vibe, foods, specific names, times of day, etc.). Only things
+   they actually said.
 
-3) languages — language names in Title Case the speaker is comfortable using.
+3) languages — language names in Title Case the speaker EXPLICITLY said they
+   speak or are comfortable using. Only include a language they clearly stated.
+   NEVER infer a language from where they live, and never assume English,
+   Dutch, or German unless they said it. If none stated, return [].
 
 4) activity_types — 2–4 short style descriptors (e.g. "sit-down", "creative", "low-pressure first meeting", "outdoors", "structured", "games", "language exchange").
 
 5b) availability — array of zero or more tokens, chosen ONLY from this exact set, describing when the speaker said they are usually free:
    "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible".
-   Map naturally: "weekends" → "every-weekend"; "Thursday evenings" → "thursday-evening" (and also "weekday-evenings"); "Friday mornings/afternoons" → "friday-morning"; "I'm pretty flexible / anytime" → "flexible". Include only tokens clearly supported by what they said. If nothing is stated, return [].
+   Capture what they ACTUALLY said, mapped to the closest token — but never add a specific day or time they did not name:
+   - "weekend(s)" / "Saturdays" / "Sundays" → "every-weekend"
+   - generic "evenings" / "after work" / "weeknights" → "weekday-evenings" (do NOT upgrade this to "thursday-evening")
+   - they explicitly name Thursday evening → "thursday-evening"
+   - "Friday morning/afternoon" → "friday-morning"
+   - "flexible" / "anytime" / "whenever" → "flexible"
+   Include only what they clearly said. If they mention timing that fits nothing here, still capture it in minor_interests. If no availability is mentioned, return [].
 
 5c) commitment — a single token, chosen ONLY from this exact set, capturing how much they want to commit:
    "try-once" (just see how it feels / one time), "maybe-weekly" (maybe make it weekly), "regular-thing" (wants a regular/ongoing thing), "open-ended" (no fixed cadence). If unclear, return "".
 
-5) activities — 3 concrete activity suggestions grounded in what they actually said. Each suggestion is an object:
+5) activities — concrete activity suggestions, one or more for as many of their
+   interests as you can. MORE IS BETTER — if they mentioned ten things, lean
+   toward ten or more suggestions. There is no small cap; aim to cover
+   everything they brought up. Every suggestion must be grounded in something
+   they actually said (never invent). Each suggestion is an object:
    - title: action-oriented phrase, 2–6 words (e.g. "Start a Catan round", "Casual photo walk", "Cook a new dish together")
    - description: one short sentence about what would happen
    - day: a realistic day of the week ("Thursday", "Saturday", etc.)
@@ -74,10 +86,6 @@ Rules:
   "best friends", "dating", "networking".
 - Keep tone calm, neutral, respectful.
 - Return ONLY a JSON object, no prose, no markdown fences.`;
-
-function wordCount(s: string) {
-  return s.trim().split(/\s+/).filter(Boolean).length;
-}
 
 interface Topic {
   title: string;
@@ -177,9 +185,9 @@ function coerce(raw: unknown): Analysis {
               : "",
           tags: lowerList(t.tags, 5),
         }))
-        .slice(0, 8)
+        .slice(0, 24)
     : [];
-  const minor = strList(r.minor_interests, 5);
+  const minor = strList(r.minor_interests, 12);
   const langs = strList(r.languages, 6);
   const types = strList(r.activity_types, 4);
   const availability = tokenList(r.availability, AVAILABILITY_TOKENS, 5);
@@ -223,7 +231,7 @@ function coerce(raw: unknown): Analysis {
           reason:
             typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
         }))
-        .slice(0, 4)
+        .slice(0, 24)
     : [];
   return {
     topics,
@@ -246,7 +254,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { transcript?: unknown; demoMode?: unknown };
+  let body: { transcript?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -255,16 +263,10 @@ export async function POST(req: NextRequest) {
 
   const transcript =
     typeof body.transcript === "string" ? body.transcript.trim() : "";
-  const demoMode = body.demoMode === true;
 
   if (!transcript) {
     return NextResponse.json({ error: "Empty transcript" }, { status: 400 });
   }
-
-  const padded =
-    demoMode && wordCount(transcript) < 40
-      ? `${transcript}\n\n${DEMO_PADDING}`
-      : transcript;
 
   const r = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -278,7 +280,7 @@ export async function POST(req: NextRequest) {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: padded },
+        { role: "user", content: transcript },
       ],
     }),
   });
@@ -334,8 +336,5 @@ export async function POST(req: NextRequest) {
   }
 
   const analysis = coerce(parsed);
-  return NextResponse.json({
-    ...analysis,
-    padded_for_demo: demoMode && wordCount(transcript) < 40,
-  });
+  return NextResponse.json(analysis);
 }
