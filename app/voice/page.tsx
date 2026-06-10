@@ -351,7 +351,7 @@ const NUDGE_IDEAS = [
   ["🎲", "What you've been into", "Board games, a sport, a show you binged, a game you keep replaying"],
   ["🎧", "What you make or create", "Music, photos, cooking, building things, writing"],
   ["🌧️", "Your Rotterdam", "Cafés, walks, neighbourhoods, spots you love or want to explore"],
-  ["🗓️", "Your rhythm", "When you're free, how often you'd meet, languages you're comfortable in"],
+  ["🗓️", "Your rhythm", "When you're free and how often you'd like to meet"],
 ] as const;
 
 function NudgePrompt() {

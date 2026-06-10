@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Clock,
   MapPin,
@@ -21,6 +21,15 @@ import { formatDayTime, formatDuration } from "@/lib/formatActivity";
 import { useAppMode } from "@/lib/useAppMode";
 import { pipelineStageLabel } from "@/lib/voicePipeline";
 import { ThinkingDots } from "@/components/Loading";
+import {
+  clearCached,
+  getCached,
+  getOrFetchSuggestions,
+  topicSignature,
+  type RawSuggestedActivity,
+} from "@/lib/suggestionsCache";
+
+type RegenStatus = "idle" | "loading" | "ready" | "error";
 
 export default function Suggestions() {
   const router = useRouter();
@@ -30,10 +39,13 @@ export default function Suggestions() {
     markActivityForSync,
     pipelineStage,
     similarPeople,
+    setSuggestedActivities,
   } = useApp();
   const mode = useAppMode();
   const isDemo = mode === "demo";
   const isCollect = mode === "collect";
+  const [regen, setRegen] = useState<RegenStatus>("idle");
+  const [retryTick, setRetryTick] = useState(0);
 
   const topicOrder = useMemo(
     () =>
@@ -62,20 +74,117 @@ export default function Suggestions() {
   }, [state.suggestedActivities, topicOrder]);
 
   const hasLiveTranscript = !!state.transcript.trim();
+  const pipelineBusy =
+    pipelineStage === "transcribing" ||
+    pipelineStage === "understanding" ||
+    pipelineStage === "planning";
   const activitiesLoading =
     hasLiveTranscript &&
     cards.length === 0 &&
-    (pipelineStage === "planning" ||
-      pipelineStage === "understanding" ||
-      pipelineStage === "syncing");
+    (pipelineBusy || regen === "loading");
+  const suggestFailed =
+    hasLiveTranscript &&
+    cards.length === 0 &&
+    !pipelineBusy &&
+    (regen === "error" || pipelineStage === "ready" || pipelineStage === "error");
   const peopleLoading =
     hasLiveTranscript &&
     similarPeople.length === 0 &&
-    (pipelineStage === "people" || pipelineStage === "syncing");
+    (pipelineStage === "people" ||
+      pipelineStage === "syncing" ||
+      (pipelineStage === "ready" && regen === "loading"));
 
   useEffect(() => {
     router.prefetch("/activity/edit");
   }, [router]);
+
+  useEffect(() => {
+    if (cards.length > 0) {
+      setRegen("ready");
+      return;
+    }
+    if (pipelineBusy) return;
+
+    const visibleTopics = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => ({
+        title: t.title,
+        explanation: t.explanation,
+        tags: t.tags,
+      }));
+    if (visibleTopics.length === 0) return;
+
+    const sig = topicSignature(visibleTopics);
+    const cached = getCached(sig);
+    if (cached) {
+      setSuggestedActivities(cached);
+      setRegen("ready");
+      return;
+    }
+
+    let cancelled = false;
+    setRegen("loading");
+    const safety = setTimeout(() => {
+      if (!cancelled) setRegen("error");
+    }, 25000);
+
+    getOrFetchSuggestions(sig, async () => {
+      const r = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: visibleTopics,
+          transcript: state.transcript,
+          availability_hints: state.signup.availability,
+          minor_interests: state.minorInterests,
+        }),
+      });
+      if (!r.ok) throw new Error(`Suggest failed (${r.status})`);
+      const data = (await r.json()) as { activities?: RawSuggestedActivity[] };
+      const list = Array.isArray(data.activities) ? data.activities : [];
+      if (list.length === 0) throw new Error("Empty activities");
+      return list;
+    })
+      .then((activities) => {
+        if (cancelled) return;
+        clearTimeout(safety);
+        setSuggestedActivities(activities);
+        setRegen("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        clearTimeout(safety);
+        console.warn("Suggestions regen failed", err);
+        setRegen("error");
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, [
+    cards.length,
+    pipelineBusy,
+    state.topics,
+    state.transcript,
+    state.signup.availability,
+    state.minorInterests,
+    setSuggestedActivities,
+    retryTick,
+  ]);
+
+  const retrySuggest = useCallback(() => {
+    const visibleTopics = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => ({
+        title: t.title,
+        explanation: t.explanation,
+        tags: t.tags,
+      }));
+    if (visibleTopics.length === 0) return;
+    clearCached(topicSignature(visibleTopics));
+    setRetryTick((t) => t + 1);
+  }, [state.topics]);
 
   function reasonFor(a: Activity): string {
     return a.note || a.description || "";
@@ -163,21 +272,33 @@ export default function Suggestions() {
             Still drafting from your voice… {pipelineStageLabel(pipelineStage)}
           </p>
         </div>
+      ) : suggestFailed ? (
+        <Card className="text-center py-8 px-5">
+          <p className="text-[14px] text-[var(--color-ink-soft)] mb-4 leading-relaxed">
+            {regen === "error"
+              ? "Homi couldn't draft activities from your interests. This is usually temporary — try again."
+              : "Homi is still drafting activities from your voice. Try again in a moment, or edit your interests."}
+          </p>
+          <div className="flex flex-col gap-2">
+            <SecondaryButton onClick={retrySuggest}>
+              <RotateCcw size={14} /> Try again
+            </SecondaryButton>
+            <SecondaryButton onClick={() => router.push("/themes")}>
+              Edit interests
+            </SecondaryButton>
+            <GhostButton onClick={() => router.push("/voice")}>
+              Record again
+            </GhostButton>
+          </div>
+        </Card>
       ) : cards.length === 0 ? (
         <Card className="text-center py-8 px-5">
           <p className="text-[14px] text-[var(--color-ink-soft)] mb-4 leading-relaxed">
-            {hasLiveTranscript
-              ? "Homi didn't finish drafting activities yet. Go back to themes to retry, or record again."
-              : "Load a sample voice profile or record to see personalized suggestions."}
+            Record your voice first — Homi needs that to draft activities for you.
           </p>
-          <div className="flex flex-col gap-2">
-            <SecondaryButton onClick={() => router.push("/themes")}>
-              Back to themes
-            </SecondaryButton>
-            <GhostButton onClick={() => router.push("/voice")}>
-              <RotateCcw size={14} /> Record again
-            </GhostButton>
-          </div>
+          <GhostButton onClick={() => router.push("/voice")}>
+            <RotateCcw size={14} /> Record your voice
+          </GhostButton>
         </Card>
       ) : (
         <div className="grid gap-4 stagger">

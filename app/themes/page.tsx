@@ -63,10 +63,9 @@ export default function Themes() {
     // Pipeline already fetches suggestions in the background.
     if (
       state.suggestedActivities.length > 0 ||
-      pipelineStage === "planning" ||
-      pipelineStage === "syncing" ||
-      pipelineStage === "people" ||
-      pipelineStage === "ready"
+      pipelineStage === "transcribing" ||
+      pipelineStage === "understanding" ||
+      pipelineStage === "planning"
     ) {
       if (state.suggestedActivities.length > 0) setRegen("ready");
       return;

@@ -242,7 +242,7 @@ export default function ShowMore() {
         You control what is used.
       </div>
 
-      <Link href="/signup/details">
+      <Link href="/suggestions">
         <PrimaryButton>Looks good</PrimaryButton>
       </Link>
     </AppShell>

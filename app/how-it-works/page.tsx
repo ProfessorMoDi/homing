@@ -9,17 +9,17 @@ const steps = [
   {
     n: "1",
     title: "Talk",
-    body: "Record for around two minutes about what you've been into lately.",
+    body: "Record for about 30 seconds — several interests is enough.",
   },
   {
     n: "2",
-    title: "Review",
-    body: "HOMING shows the main themes it heard. You can edit everything.",
+    title: "Profile",
+    body: "While Homi works in the background, answer a few quick questions. Your interests and similar people appear as they land.",
   },
   {
     n: "3",
-    title: "Start",
-    body: "HOMING suggests a specific activity, like Catan on Thursday evening.",
+    title: "Pick an activity",
+    body: "Homi suggests concrete things you could do — edit any, or start one.",
   },
   {
     n: "4",

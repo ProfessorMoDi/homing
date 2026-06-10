@@ -5,8 +5,6 @@ import { AppShell } from "@/components/AppShell";
 import { Card, Avatar, Pill, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 
-const MEMBERS = ["You", "Franz", "Lena", "Sophie", "Mark"];
-
 function activityNoun(title: string): string {
   const cleaned = title
     .replace(/^(start a |start the |try a |try the |begin a |begin the |a |the )/i, "")
@@ -33,8 +31,12 @@ function rhythmFromDay(day: string): string {
 }
 
 export default function RecurringGroup() {
-  const { state } = useApp();
+  const { state, acceptedInvitees } = useApp();
   const a = state.activity;
+  const members = [
+    "You",
+    ...acceptedInvitees.map((u) => u.first_name || "HOMING member"),
+  ];
   const tags = [
     ...a.specific_interest_tags,
     ...a.broader_interest_tags,
@@ -49,7 +51,7 @@ export default function RecurringGroup() {
         <p className="display text-[24px] mb-1">{groupTitle(a.title)}</p>
         <div className="grid gap-1.5 text-[13.5px] text-[var(--color-ink-soft)] mt-2">
           <span className="inline-flex items-center gap-2">
-            <Users size={14} /> {MEMBERS.length} people
+            <Users size={14} /> {members.length} people
           </span>
           <span className="inline-flex items-center gap-2">
             <Calendar size={14} /> {rhythmFromDay(a.day)}
@@ -60,7 +62,7 @@ export default function RecurringGroup() {
       <Card className="mb-5">
         <p className="text-[13px] font-medium mb-3">Members</p>
         <div className="flex flex-wrap gap-2">
-          {MEMBERS.map((n, i) => (
+          {members.map((n, i) => (
             <div
               key={n}
               className="inline-flex items-center gap-2 pr-3 pl-1 py-1 rounded-full bg-[var(--color-cream-warm)]"

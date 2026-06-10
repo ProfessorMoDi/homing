@@ -16,6 +16,20 @@ import { useAuth } from "@/lib/auth";
 
 type Phase = "working" | "need-email" | "error";
 
+function profileLooksComplete(signup: {
+  gender: string;
+  postcode: string;
+  availability: string[];
+  commitment: string;
+}): boolean {
+  return (
+    !!signup.gender &&
+    signup.postcode.trim().length >= 3 &&
+    signup.availability.length > 0 &&
+    !!signup.commitment
+  );
+}
+
 export default function AuthFinish() {
   const router = useRouter();
   const { state, setSignup } = useApp();
@@ -26,11 +40,15 @@ export default function AuthFinish() {
 
   function onSignedIn(verifiedEmail: string) {
     setSignup({ email: verifiedEmail });
-    // Already onboarded on this device → straight to the confirmation screen;
-    // otherwise begin the voice flow.
-    router.replace(
-      state.topics.length > 0 ? "/suggestions" : "/voice",
-    );
+    if (state.topics.length > 0) {
+      router.replace(
+        profileLooksComplete(state.signup)
+          ? "/suggestions"
+          : "/signup/details?fromVoice=1",
+      );
+      return;
+    }
+    router.replace("/voice");
   }
 
   async function finish(emailOverride?: string) {

@@ -1297,7 +1297,7 @@ function ShipSlide() {
         </p>
         <div className="flex flex-col md:flex-row items-center justify-center gap-3 md:gap-4">
           <Link
-            href="/voice"
+            href="/demo"
             className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white text-[var(--color-sage-deep)] text-[14px] md:text-[15px] font-medium hover:bg-[var(--color-cream-warm)] transition-colors"
           >
             See the demo

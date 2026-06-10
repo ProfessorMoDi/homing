@@ -6,6 +6,7 @@ import { Send, Sparkle, Pencil, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, Avatar, PrimaryButton, GhostButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
+import { useAppMode } from "@/lib/useAppMode";
 import type { Activity } from "@/lib/types";
 import { formatDuration } from "@/lib/formatActivity";
 
@@ -49,6 +50,7 @@ const INITIAL: ChatMessage[] = [
 export default function Chat() {
   const router = useRouter();
   const { state, acceptedInvitees } = useApp();
+  const isDemo = useAppMode() === "demo";
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
   const [draft, setDraft] = useState(() => buildDraft(state.activity));
   const [draftOpen, setDraftOpen] = useState(true);
@@ -104,13 +106,15 @@ export default function Chat() {
       back="/activity/details"
       title={state.activity.title}
       right={
-        <button
-          className="btn-ghost"
-          onClick={() => router.push("/feedback")}
-          title="Jump to feedback"
-        >
-          Skip to feedback
-        </button>
+        isDemo ? (
+          <button
+            className="btn-ghost"
+            onClick={() => router.push("/feedback")}
+            title="Jump to feedback"
+          >
+            Skip to feedback
+          </button>
+        ) : undefined
       }
     >
       <div className="grid gap-3 mb-4">

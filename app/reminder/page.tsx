@@ -6,11 +6,13 @@ import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
 import { useApp } from "@/lib/store";
+import { useAppMode } from "@/lib/useAppMode";
 import { formatDayTime } from "@/lib/formatActivity";
 
 export default function Reminder() {
   const router = useRouter();
   const { state } = useApp();
+  const isDemo = useAppMode() === "demo";
   const a = state.activity;
 
   return (
@@ -48,16 +50,20 @@ export default function Reminder() {
           <Navigation size={16} />
           Directions
         </SecondaryButton>
-        <button
-          className="btn-ghost"
-          onClick={() => router.push("/feedback")}
-        >
-          Pretend it happened — go to feedback
-        </button>
+        {isDemo && (
+          <>
+            <button
+              className="btn-ghost"
+              onClick={() => router.push("/feedback")}
+            >
+              Pretend it happened — go to feedback
+            </button>
+            <p className="text-[12px] text-[var(--color-muted)] text-center mt-1">
+              Demo shortcut to skip ahead in the walk-through.
+            </p>
+          </>
+        )}
       </div>
-      <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
-        Demo shortcut for the hackathon flow.
-      </p>
     </AppShell>
   );
 }

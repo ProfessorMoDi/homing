@@ -141,20 +141,37 @@ export async function runVoicePipeline(
       handlers.onStage("planning");
       checkAbort();
 
-      const sr = await fetch("/api/suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transcript,
-          topics: analysis.topics,
-          languages: analysis.languages,
-          availability_hints: analysis.availability,
-          minor_interests: analysis.minor_interests,
-        }),
-      });
-      if (sr.ok) {
-        const sd = (await sr.json()) as { activities?: PipelineSuggestedActivity[] };
-        activities = sd.activities ?? [];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 600));
+          checkAbort();
+        }
+        try {
+          const sr = await fetch("/api/suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              transcript,
+              topics: analysis.topics,
+              languages: analysis.languages,
+              availability_hints: analysis.availability,
+              minor_interests: analysis.minor_interests,
+            }),
+          });
+          if (sr.ok) {
+            const sd = (await sr.json()) as { activities?: PipelineSuggestedActivity[] };
+            activities = sd.activities ?? [];
+            if (activities.length > 0) break;
+          } else {
+            console.warn(
+              "[voicePipeline] suggest failed",
+              sr.status,
+              await sr.text().catch(() => ""),
+            );
+          }
+        } catch (err) {
+          console.warn("[voicePipeline] suggest error", err);
+        }
       }
       if (activities.length > 0) {
         handlers.onActivities(activities);

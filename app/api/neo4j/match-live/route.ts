@@ -97,9 +97,10 @@ export async function POST(req: NextRequest) {
         .map(normalizePath)
         .filter((p): p is PathRow => p !== null);
       const interest = toNumber(r.get("interest_score"));
+      const userId = r.get("user_id") as string;
       return {
-        user_id: r.get("user_id") as string,
-        first_name: (r.get("first_name") as string) ?? "Someone",
+        user_id: userId,
+        first_name: memberLabel(r.get("first_name") as string | null, userId),
         neighbourhood: (r.get("neighbourhood") as string) ?? "",
         score: interest,
         shared_count: toNumber(r.get("shared_count")),
@@ -133,6 +134,16 @@ function toNumber(v: unknown): number {
   if (v && typeof (v as { toNumber?: () => number }).toNumber === "function")
     return (v as { toNumber: () => number }).toNumber();
   return Number(v) || 0;
+}
+
+function memberLabel(firstName: string | null | undefined, userId: string): string {
+  const name = firstName?.trim();
+  if (name) return name;
+  const slug = userId.replace(/^u_/, "").replace(/-/g, " ").trim();
+  if (slug && slug !== "demo" && slug !== "anon") {
+    return slug.charAt(0).toUpperCase() + slug.slice(1);
+  }
+  return "HOMING member";
 }
 
 function dedupe(arr: string[]): string[] {

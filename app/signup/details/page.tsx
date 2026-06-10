@@ -235,11 +235,13 @@ function SignUpDetails() {
     router.push(nextAfterProfile);
   }
 
+  const profileBack = fromVoice ? "/voice" : "/themes";
+
   // Wait for the one-shot snapshot (taken after hydration) before deciding
   // which questions to show.
   if (steps === null) {
     return (
-      <AppShell back="/themes" title="Quick profile">
+      <AppShell back={profileBack} title="Quick profile">
         <div className="flex items-center justify-center min-h-[40dvh] text-[13px] text-[var(--color-muted)]">
           Loading your profile…
         </div>
@@ -253,7 +255,7 @@ function SignUpDetails() {
       fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
 
     return (
-      <AppShell back="/themes" title="Your profile">
+      <AppShell back={profileBack} title="Your profile">
         {showPipeline && (
           <PipelineStrip stage={pipelineStage} showActivities />
         )}
