@@ -49,7 +49,7 @@ import {
   syncVoice,
 } from "./neo4jClient";
 import { currentUserContext, DEMO_ID, type UserContext } from "./currentUser";
-import { isCollect, isDemo } from "./appMode";
+import { isDemo } from "./appMode";
 import {
   runVoicePipeline,
   type PipelineStage,
@@ -176,51 +176,16 @@ interface LiveProfile {
   activities: SuggestedActivity[];
 }
 
-const KNOWN_LANGS = ["English", "Dutch", "German", "French", "Spanish", "Arabic"];
-
-// Map free-form language names from the LLM onto the chip vocabulary used by
-// the profile form. Anything we don't recognise collapses into "Other" + a
-// free-text label so the gap-filler can show it pre-filled.
-function mapLanguages(names: string[]): { list: string[]; other?: string } {
-  const known: string[] = [];
-  const unknown: string[] = [];
-  for (const raw of names) {
-    const name = raw.trim();
-    if (!name) continue;
-    const hit = KNOWN_LANGS.find((l) => l.toLowerCase() === name.toLowerCase());
-    if (hit) {
-      if (!known.includes(hit)) known.push(hit);
-    } else if (!unknown.includes(name)) {
-      unknown.push(name);
-    }
-  }
-  if (unknown.length > 0) known.push("Other");
-  return { list: known, other: unknown[0] };
-}
-
 // Translate the voice analysis into signup-form fields, but only for fields
 // the user hasn't already provided — so re-running analysis never clobbers a
-// real answer. gender / gender_preference / postcode are never inferred from
-// voice; the gap-filler always asks those explicitly.
+// real answer. gender / postcode are never inferred from voice; the gap-filler
+// always asks those explicitly.
 function deriveSignupFromProfile(
   current: Signup,
   profile: LiveProfile,
 ): Partial<Signup> {
   const patch: Partial<Signup> = {};
   const missing = new Set(profile.missing_fields ?? []);
-  const langOk =
-    profile.language_confidence === "high" &&
-    profile.languages.length > 0 &&
-    !missing.has("languages_comfortable");
-
-  if (!current.languages_comfortable.length && langOk) {
-    const { list, other } = mapLanguages(profile.languages);
-    if (list.length) {
-      patch.languages_comfortable = list;
-      if (!current.languages_spoken.length) patch.languages_spoken = list;
-      if (other && !current.language_other) patch.language_other = other;
-    }
-  }
   if (
     !current.availability.length &&
     profile.availability?.length &&
@@ -412,10 +377,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // failures.
   useEffect(() => {
     if (!hydrated) return;
-    // The collect build never uses activities — it only records who the person
-    // is and what they like. Persisting analyze's throwaway activity ideas would
-    // just pile up orphan Activity nodes that accumulate on every re-record.
-    if (isCollect()) return;
     for (const a of state.suggestedActivities) {
       if (!a?.id || syncedRef.current.has(a.id)) continue;
       syncedRef.current.add(a.id);
@@ -601,11 +562,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Mirror profile answers into Neo4j as the user fills them after voice.
   useEffect(() => {
     if (!hydrated || !state.transcript) return;
-    const { gender, postcode, gender_pref, commitment } = state.signup;
+    const { gender, postcode, commitment } = state.signup;
     const hasMirrorable =
       !!gender ||
       postcode.trim().length >= 3 ||
-      !!gender_pref ||
       !!commitment ||
       state.signup.languages_comfortable.length > 0 ||
       state.signup.availability.length > 0;
@@ -618,7 +578,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     hydrated,
     state.transcript,
     state.signup.gender,
-    state.signup.gender_pref,
     state.signup.postcode,
     state.signup.languages_comfortable,
     state.signup.languages_spoken,
@@ -918,7 +877,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       },
       {
-        skipActivities: isCollect(),
+        skipActivities: false,
         selfId: currentUserContext(signupRef.current).id,
         signal: ac.signal,
         beforePeopleMatch: async () => {

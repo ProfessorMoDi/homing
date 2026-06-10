@@ -38,18 +38,10 @@ export default function Themes() {
   const [regen, setRegen] = useState<RegenStatus>("idle");
   const [retryTick, setRetryTick] = useState(0);
 
-  // The collect build ends after the profile — it never shows activity
-  // suggestions — so it must not wait on (or fire) the /api/suggest call.
   const mode = useAppMode();
-  const collect = mode === "collect";
   const showDemoSample = mode === "demo";
 
-  // Forward progress is gated on *having* suggestions, not on the refresh
-  // finishing. analyze (or the pre-seeded cache) already populated the cards,
-  // so the user can move on while a refresh is still in flight; "ready" and
-  // "error" both leave something usable on /suggestions.
   const canContinue =
-    collect ||
     state.topics.length > 0 ||
     state.suggestedActivities.length > 0 ||
     regen === "ready" ||
@@ -68,9 +60,6 @@ export default function Themes() {
   // module's inflight dedup keeps the network call to one even though the
   // effect runs twice under Strict Mode.
   useEffect(() => {
-    // Collect build never surfaces suggestions — don't spend an LLM call.
-    if (collect) return;
-
     // Pipeline already fetches suggestions in the background.
     if (
       state.suggestedActivities.length > 0 ||
@@ -119,7 +108,6 @@ export default function Themes() {
         body: JSON.stringify({
           topics: visibleTopics,
           transcript: state.transcript,
-          languages: state.signup.languages_comfortable,
           availability_hints: state.signup.availability,
           minor_interests: state.minorInterests,
         }),
@@ -151,13 +139,11 @@ export default function Themes() {
     };
   }, [
     state.topics,
-    state.signup.languages_comfortable,
     state.signup.availability,
     state.minorInterests,
     state.transcript,
     setSuggestedActivities,
     retryTick,
-    collect,
     pipelineStage,
     state.suggestedActivities.length,
   ]);
@@ -260,25 +246,23 @@ export default function Themes() {
         </div>
       )}
 
-      {!collect && (
-        <div className="card-outline p-3 mb-4 text-[12.5px] text-[var(--color-ink-soft)]">
-          {state.suggestedActivities.length > 0 ? (
-            <>
-              <span className="text-[var(--color-sage-deep)] font-medium">
-                {state.suggestedActivities.length} activity ideas ready
-              </span>
-              {" — review interests below, then see suggestions."}
-            </>
-          ) : pipelineStage === "planning" || pipelineStage === "syncing" ? (
-            <>
-              <ThinkingDots size="small" /> Homi is drafting activity ideas from
-              your {state.topics.length} interests…
-            </>
-          ) : (
-            "Activities will appear on the next screen once Homi finishes drafting."
-          )}
-        </div>
-      )}
+      <div className="card-outline p-3 mb-4 text-[12.5px] text-[var(--color-ink-soft)]">
+        {state.suggestedActivities.length > 0 ? (
+          <>
+            <span className="text-[var(--color-sage-deep)] font-medium">
+              {state.suggestedActivities.length} activity ideas ready
+            </span>
+            {" — review interests below, then see suggestions."}
+          </>
+        ) : pipelineStage === "planning" || pipelineStage === "syncing" ? (
+          <>
+            <ThinkingDots size="small" /> Homi is drafting activity ideas from
+            your {state.topics.length} interests…
+          </>
+        ) : (
+          "Activities will appear on the next screen once Homi finishes drafting."
+        )}
+      </div>
 
       <div className="grid gap-3 mb-5 stagger">
         {state.topics.map((t) => (
@@ -356,7 +340,7 @@ export default function Themes() {
 
       <div className="divider" />
 
-      {!collect && <RegenBadge status={regen} onRetry={onRetry} />}
+      <RegenBadge status={regen} onRetry={onRetry} />
 
       <PrimaryButton
         onClick={() => {

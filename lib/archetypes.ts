@@ -291,7 +291,6 @@ export function fillSignupGaps(
   if (!current.first_name) patch.first_name = archetype.first_name;
   if (current.age == null) patch.age = archetype.age;
   if (!current.gender) patch.gender = archetype.gender;
-  if (!current.gender_pref) patch.gender_pref = archetype.gender_pref;
   if (!current.postcode) patch.postcode = archetype.postcode;
   if (!current.languages_spoken?.length) patch.languages_spoken = archetype.languages_spoken;
   if (!current.languages_comfortable?.length) patch.languages_comfortable = archetype.languages_comfortable;

@@ -31,7 +31,9 @@ export default function Suggestions() {
     pipelineStage,
     similarPeople,
   } = useApp();
-  const isDemo = useAppMode() === "demo";
+  const mode = useAppMode();
+  const isDemo = mode === "demo";
+  const isCollect = mode === "collect";
 
   const topicOrder = useMemo(
     () =>
@@ -86,7 +88,7 @@ export default function Suggestions() {
   }
 
   return (
-    <AppShell back="/themes" title="Suggested for you">
+    <AppShell back="/signup/details" title="Suggested for you">
       <h1 className="display text-[28px] leading-tight mb-1">
         Suggested for you
       </h1>
@@ -95,11 +97,16 @@ export default function Suggestions() {
           ? `${cards.length} ideas from what you talked about — pick any, edit, or skip.`
           : "Activities based on your voice profile will appear here."}
       </p>
-      {cards.length > 0 && (
-        <p className="text-[12px] text-[var(--color-sage-deep)] inline-flex items-center gap-1.5 mb-5">
-          <Sparkles size={12} /> Generated from your voice profile
-        </p>
-      )}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5">
+        {cards.length > 0 && (
+          <p className="text-[12px] text-[var(--color-sage-deep)] inline-flex items-center gap-1.5">
+            <Sparkles size={12} /> Generated from your voice profile
+          </p>
+        )}
+        <GhostButton onClick={() => router.push("/themes")}>
+          Edit interests
+        </GhostButton>
+      </div>
 
       {isDemo && (
         <Link href="/invite" className="block mb-5">
@@ -240,10 +247,10 @@ export default function Suggestions() {
 
       {hasLiveTranscript && (
         <section className="mt-8 pt-6 border-t border-[var(--color-line)]">
-          <h2 className="display text-[20px] mb-1">People like you</h2>
+          <h2 className="display text-[20px] mb-1">Who is similar to you?</h2>
           <p className="text-[13px] text-[var(--color-muted)] mb-4">
-            In the network who share your interests — overlap, not a perfect
-            match yet.
+            People in the network who share your interests — overlap, not a
+            perfect match yet.
           </p>
           {peopleLoading ? (
             <div className="grid gap-3">
@@ -287,6 +294,22 @@ export default function Suggestions() {
             </Card>
           ) : null}
         </section>
+      )}
+
+      {isCollect && (
+        <div className="mt-8 pt-6 border-t border-[var(--color-line)]">
+          <p className="text-[13px] text-[var(--color-muted)] mb-4 text-center leading-relaxed">
+            You&apos;ve seen your interests, activities, and who&apos;s similar —
+            ready to join the flock?
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/collect/done")}
+            className="btn-primary w-full"
+          >
+            Join the flock
+          </button>
+        </div>
       )}
     </AppShell>
   );

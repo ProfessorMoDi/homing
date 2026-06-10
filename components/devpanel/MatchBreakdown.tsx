@@ -3,7 +3,7 @@
 import type { DevEvent } from "../../lib/devBus";
 
 // Per-candidate score breakdown for /api/neo4j/match. Reads the response
-// shape the match endpoint returns: candidates[].breakdown is six axes,
+// shape the match endpoint returns: candidates[].breakdown is interest-only,
 // candidates[].reasons is the human-readable "Likes X (related to Y)"
 // strings derived from the graph path that won.
 
@@ -14,11 +14,6 @@ interface MatchCandidate {
   score: number;
   breakdown?: {
     interest: number;
-    availability: number;
-    language: number;
-    commitment: number;
-    location: number;
-    preference: number;
   };
   paths?: Array<{
     req_id: string;
@@ -41,14 +36,7 @@ const AXES: Array<{
   label: string;
   max: number;
   color: string;
-}> = [
-  { key: "interest",     label: "Interest",     max: 100, color: "sage"  },
-  { key: "availability", label: "Availability", max:  25, color: "sky"   },
-  { key: "language",     label: "Language",     max:  15, color: "clay"  },
-  { key: "commitment",   label: "Commitment",   max:   6, color: "sand"  },
-  { key: "location",     label: "Location",     max:   4, color: "ink"   },
-  { key: "preference",   label: "Preference",   max:  10, color: "sage"  },
-];
+}> = [{ key: "interest", label: "Interest", max: 100, color: "sage" }];
 
 export function MatchBreakdown({ event }: { event: DevEvent }) {
   const data = (event.responseBody as MatchPayload | null) ?? null;
@@ -98,17 +86,11 @@ export function MatchBreakdown({ event }: { event: DevEvent }) {
             the strongest path so direct + indirect matches never double-count.
           </li>
           <li>
-            <strong>Interest score.</strong> Sum over the user's required
+            <strong>Interest score.</strong> Sum over the activity&apos;s required
             topics: <code>50 × weight</code> for a specific-tier requirement,{" "}
-            <code>30 × weight</code> for a broader-tier requirement.
-          </li>
-          <li>
-            <strong>Side bonuses.</strong> Add per-axis points: availability
-            (+25 thursday-evening / +22 weekend or friday-morning / +18
-            weekday-evenings / +10 flexible / −15 none), language match (+15
-            or −10), commitment-appetite (+6 if try-once or maybe-weekly),
-            location (+4 if neighbourhood = activity.location_area), prior
-            preference (+10 if the creator PREFERS_PERSON this user).
+            <code>30 × weight</code> for a broader-tier requirement. Total
+            score equals interest score — no availability, language, or other
+            side bonuses.
           </li>
           <li>
             <strong>Hard exclusions.</strong> A user who DISLIKES any

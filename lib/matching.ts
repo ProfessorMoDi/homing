@@ -97,61 +97,6 @@ export function scoreUserForActivity(
     return { user, score: -100, reasons, excluded };
   }
 
-  // 2. Availability match
-  const day = activity.day.toLowerCase();
-  const time = activity.time.toLowerCase();
-  if (day.includes("thursday") && user.availability.includes("thursday-evening")) {
-    score += 25;
-    reasons.push("Thursday evening fits");
-  } else if (
-    /(mon|tue|wed|thu)/.test(day) &&
-    user.availability.includes("weekday-evenings")
-  ) {
-    score += 18;
-    reasons.push("Weekday evenings work");
-  } else if (
-    (day.includes("saturday") || day.includes("sunday")) &&
-    user.availability.includes("every-weekend")
-  ) {
-    score += 22;
-    reasons.push("Weekend fits");
-  } else if (
-    day.includes("friday") &&
-    user.availability.includes("friday-morning") &&
-    /(morning|\bam\b|^0[0-9]:|^1[0-2]:)/.test(time)
-  ) {
-    score += 22;
-    reasons.push("Friday morning fits");
-  } else if (user.availability.includes("flexible")) {
-    score += 10;
-    reasons.push("Flexible availability");
-  } else {
-    score -= 15;
-  }
-
-  // 3. Language comfort
-  const lang = activity.language.toLowerCase();
-  const comfy = user.languages_comfortable.map((l) => l.toLowerCase());
-  if (lang === "flexible" || !lang) {
-    // Unknown / any-language activities should not penalise candidates.
-  } else if (comfy.includes(lang)) {
-    score += 15;
-    reasons.push(`Comfortable in ${activity.language}`);
-  } else {
-    score -= 10;
-  }
-
-  // 4. Commitment appetite — softer factor
-  if (
-    user.commitment_appetite === "try-once" ||
-    user.commitment_appetite === "maybe-weekly"
-  ) {
-    score += 6;
-  }
-
-  // 5. Light location proximity
-  if (user.neighbourhood === activity.location_area) score += 4;
-
   return { user, score, reasons, excluded };
 }
 

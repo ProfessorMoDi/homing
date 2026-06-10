@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { llmModelSuggest } from "@/lib/llmConfig";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -214,7 +215,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-oss:120b",
+      model: llmModelSuggest(),
       temperature: 0.4,
       response_format: { type: "json_object" },
       messages: [

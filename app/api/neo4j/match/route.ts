@@ -65,41 +65,11 @@ WITH a, u,
        tier:      tier
      }) AS paths
 
-OPTIONAL MATCH (a)-[:SCHEDULED_AT]->(ts:TimeSlot)<-[:AVAILABLE_AT]-(u)
-WITH a, u, interest_score, paths,
-     count(DISTINCT ts) AS availHits,
-     collect(DISTINCT ts.id) AS availSlots
-
-OPTIONAL MATCH (u)-[:COMFORTABLE_IN]->(lang:Language {id: toLower(a.language)})
-WITH a, u, interest_score, paths, availHits, availSlots,
-     count(lang) AS langHits
-
-OPTIONAL MATCH (:User {id: $creatorId})-[pref:PREFERS_PERSON]->(u)
-WITH a, u, interest_score, paths, availHits, availSlots, langHits,
-     count(pref) AS prefHits
-
-WITH u, interest_score, paths,
-     CASE
-       WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'thursday-evening')                THEN 25
-       WHEN availHits > 0 AND any(s IN availSlots WHERE s IN ['every-weekend','friday-morning']) THEN 22
-       WHEN availHits > 0 AND any(s IN availSlots WHERE s = 'weekday-evenings')                 THEN 18
-       WHEN (u)-[:AVAILABLE_AT]->(:TimeSlot {id: 'flexible'})                                    THEN 10
-       ELSE -15
-     END AS availability_score,
-     CASE WHEN toLower(coalesce(a.language, '')) IN ['flexible', ''] THEN 0
-          WHEN langHits > 0 THEN 15 ELSE -10 END AS language_score,
-     CASE WHEN u.commitment_appetite IN ['try-once','maybe-weekly'] THEN 6 ELSE 0 END AS commitment_score,
-     CASE WHEN u.neighbourhood = a.location_area THEN 4 ELSE 0 END AS location_score,
-     CASE WHEN prefHits > 0 THEN 10 ELSE 0 END AS preference_score
-
 RETURN u.id                  AS user_id,
        u.first_name          AS first_name,
        u.neighbourhood       AS neighbourhood,
-       toInteger(interest_score)                                  AS interest_score,
-       availability_score, language_score, commitment_score,
-       location_score, preference_score,
-       toInteger(interest_score) + availability_score + language_score +
-         commitment_score + location_score + preference_score     AS score,
+       toInteger(interest_score) AS interest_score,
+       toInteger(interest_score) AS score,
        paths
 ORDER BY score DESC
 LIMIT 20
@@ -121,11 +91,6 @@ interface Candidate {
   score: number;
   breakdown: {
     interest: number;
-    availability: number;
-    language: number;
-    commitment: number;
-    location: number;
-    preference: number;
   };
   paths: PathRecord[];
   reasons: string[];
@@ -159,11 +124,6 @@ export async function POST(req: NextRequest) {
         score: toNumber(r.get("score")),
         breakdown: {
           interest: toNumber(r.get("interest_score")),
-          availability: toNumber(r.get("availability_score")),
-          language: toNumber(r.get("language_score")),
-          commitment: toNumber(r.get("commitment_score")),
-          location: toNumber(r.get("location_score")),
-          preference: toNumber(r.get("preference_score")),
         },
         paths,
         reasons: paths.map(formatReason),

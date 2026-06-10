@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cleanupTranscript } from "@/lib/transcriptCleanup";
+import { llmModelUnderstand } from "@/lib/llmConfig";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -146,8 +147,6 @@ const COMMITMENT_TOKENS = new Set([
   "open-ended",
 ]);
 const MISSING_FIELD_TOKENS = new Set([
-  "languages_comfortable",
-  "languages_spoken",
   "availability",
   "commitment",
   "gender",
@@ -319,9 +318,6 @@ function languageNames(rows: LanguageRow[]): string[] {
 
 function computeMissingFields(u: UnderstandResult): string[] {
   const missing: string[] = [];
-  if (u.language_confidence !== "high" || u.languages.length === 0) {
-    missing.push("languages_comfortable");
-  }
   if (u.availability.length === 0) missing.push("availability");
   if (!u.commitment) missing.push("commitment");
   // gender and postcode are never inferred from voice
@@ -343,7 +339,7 @@ async function callLlm(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-oss:120b",
+      model: llmModelUnderstand(),
       temperature,
       response_format: { type: "json_object" },
       messages: [

@@ -17,7 +17,6 @@ export interface SignupSnapshot {
   email: string;
   age: number | null;
   gender: string;
-  gender_pref: string;
   postcode: string;
   languages_spoken: string[];
   languages_comfortable: string[];
@@ -45,7 +44,6 @@ export function buildSignupSync(
 ): SignupSync {
   const ctx = currentUserContext(snap.signup);
   const sig = snap.signup;
-  const genderPref = sig.gender_pref || "either";
 
   return {
     id: ctx.id,
@@ -54,7 +52,6 @@ export function buildSignupSync(
     email: sig.email || undefined,
     age: sig.age ?? undefined,
     gender: sig.gender || undefined,
-    gender_preference: genderPref,
     postcode: sig.postcode || undefined,
     neighbourhood: sig.postcode ? postcodeToNeighbourhood(sig.postcode) : undefined,
     language_other: sig.language_other || undefined,

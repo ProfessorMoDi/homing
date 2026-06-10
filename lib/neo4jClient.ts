@@ -215,11 +215,6 @@ export interface GraphMatchCandidate {
   score: number;
   breakdown?: {
     interest: number;
-    availability: number;
-    language: number;
-    commitment: number;
-    location: number;
-    preference: number;
   };
   paths?: Array<{
     req_id: string;

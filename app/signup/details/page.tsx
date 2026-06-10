@@ -1,13 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
-import { pipelineStageLabel } from "@/lib/voicePipeline";
+import {
+  PipelineStrip,
+  ProgressiveResults,
+} from "@/components/OnboardingProgress";
 
 const GENDER = [
   ["male", "Male"],
@@ -15,15 +18,6 @@ const GENDER = [
   ["non-binary", "Non-binary"],
   ["prefer-not-to-say", "Prefer not to say"],
 ] as const;
-
-const GROUP_PREF = [
-  ["same-gender", "Same-gender groups only"],
-  ["mixed", "Mixed groups"],
-  ["either", "No preference"],
-] as const;
-
-const LANGS = ["English", "Dutch", "German", "French", "Spanish", "Arabic"];
-const LANG_OPTIONS = [...LANGS, "Other"].map((l) => [l, l] as const);
 
 const AVAIL = [
   ["every-weekend", "Every weekend"],
@@ -45,22 +39,11 @@ const LABELS: Record<string, string> = Object.fromEntries([
   ...COMMIT,
 ]);
 
-type FieldKey =
-  | "gender"
-  | "gender_pref"
-  | "postcode"
-  | "languages_spoken"
-  | "languages_comfortable"
-  | "availability"
-  | "commitment";
+type FieldKey = "gender" | "postcode" | "availability" | "commitment";
 
 interface Signup {
   gender: string;
-  gender_pref: string;
   postcode: string;
-  languages_spoken: string[];
-  languages_comfortable: string[];
-  language_other: string;
   availability: string[];
   commitment: string;
 }
@@ -72,7 +55,6 @@ interface Question {
   title: string;
   subtitle?: string;
   options?: readonly (readonly [string, string])[];
-  language?: boolean;
 }
 
 const QUESTIONS: Record<FieldKey, Question> = {
@@ -81,15 +63,8 @@ const QUESTIONS: Record<FieldKey, Question> = {
     kind: "single",
     eyebrow: "About you",
     title: "How do you identify?",
-    subtitle: "Only used to honour people's group preferences.",
+    subtitle: "Optional — stored on your profile, not used in matching.",
     options: GENDER,
-  },
-  gender_pref: {
-    key: "gender_pref",
-    kind: "single",
-    eyebrow: "Group comfort",
-    title: "Who would you like in your groups?",
-    options: GROUP_PREF,
   },
   postcode: {
     key: "postcode",
@@ -97,24 +72,6 @@ const QUESTIONS: Record<FieldKey, Question> = {
     eyebrow: "Where you are",
     title: "What's your postcode?",
     subtitle: "We use it to lean toward activities near you. Any country is fine.",
-  },
-  languages_spoken: {
-    key: "languages_spoken",
-    kind: "multi",
-    eyebrow: "Languages",
-    title: "Which languages do you speak?",
-    subtitle: "Pick all that apply.",
-    options: LANG_OPTIONS,
-    language: true,
-  },
-  languages_comfortable: {
-    key: "languages_comfortable",
-    kind: "multi",
-    eyebrow: "Languages",
-    title: "Which languages are you comfortable in?",
-    subtitle: "Pick all that apply.",
-    options: LANG_OPTIONS,
-    language: true,
   },
   availability: {
     key: "availability",
@@ -133,36 +90,17 @@ const QUESTIONS: Record<FieldKey, Question> = {
   },
 };
 
-function profileQuestionOrder(missingFields: string[]): FieldKey[] {
-  const order: FieldKey[] = ["gender", "gender_pref", "postcode"];
-  if (missingFields.includes("languages_comfortable")) {
-    order.push("languages_comfortable");
-  }
-  order.push("availability", "commitment");
-  return order;
+function profileQuestionOrder(_missingFields: string[]): FieldKey[] {
+  return ["gender", "postcode", "availability", "commitment"];
 }
 
 function isDone(key: FieldKey, s: Signup): boolean {
   switch (key) {
     case "gender":
       return !!s.gender;
-    case "gender_pref":
-      return !!s.gender_pref;
     case "postcode":
       // Accept any country's postcode — not everyone is Dutch.
       return s.postcode.trim().length >= 3;
-    case "languages_spoken":
-      return (
-        s.languages_spoken.length > 0 &&
-        (!s.languages_spoken.includes("Other") ||
-          (s.language_other ?? "").trim().length > 0)
-      );
-    case "languages_comfortable":
-      return (
-        s.languages_comfortable.length > 0 &&
-        (!s.languages_comfortable.includes("Other") ||
-          (s.language_other ?? "").trim().length > 0)
-      );
     case "availability":
       return s.availability.length > 0;
     case "commitment":
@@ -198,21 +136,28 @@ function SignUpDetails() {
     pipelineStage,
     pipelineError,
     retryPipeline,
+    similarPeople,
   } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromVoice = searchParams.get("fromVoice") === "1";
   const s = state.signup;
 
-  const steps = useMemo(() => {
-    if (!hydrated) return null;
-    return profileQuestionOrder(state.missingFields).filter(
-      (k) => !isDone(k, state.signup),
+  const [steps, setSteps] = useState<FieldKey[] | null>(null);
+
+  // Snapshot unanswered questions once after hydration. Recomputing on every
+  // keystroke removed a field from the list as soon as isDone flipped true,
+  // which made idx jump to the next question before the user tapped Continue.
+  useEffect(() => {
+    if (!hydrated || steps !== null) return;
+    setSteps(
+      profileQuestionOrder(state.missingFields).filter(
+        (k) => !isDone(k, state.signup),
+      ),
     );
-  }, [hydrated, state.signup, state.missingFields]);
+  }, [hydrated, state.signup, state.missingFields, steps]);
   const [idx, setIdx] = useState(0);
   const [attempted, setAttempted] = useState(false);
-  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const total = steps?.length ?? 0;
   const current = steps?.[idx];
@@ -232,14 +177,6 @@ function SignUpDetails() {
           : topicTitles.join(", ");
       items.push(`Interests · ${shown}`);
     }
-    if (s.languages_comfortable.length)
-      items.push(
-        `Languages · ${s.languages_comfortable
-          .map((l) => (l === "Other" ? s.language_other || "Other" : l))
-          .join(", ")}`,
-      );
-    else if (state.missingFields.includes("languages_comfortable"))
-      items.push("Languages · not clear from recording — pick below");
     if (s.availability.length)
       items.push(
         `Availability · ${s.availability.map((a) => LABELS[a] ?? a).join(", ")}`,
@@ -252,13 +189,9 @@ function SignUpDetails() {
   const toggleArr = (arr: string[], key: string) =>
     arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key];
 
-  // The collect build ends here: profile is committed to the graph and the
-  // user lands on the "you're in the flock" screen. The full build continues
-  // into the activity-suggestion flow.
   const mode = useAppMode();
-  const nextAfterProfile = mode === "collect" ? "/collect/done" : "/themes";
-  const finishLabel =
-    mode === "collect" ? "Join the flock" : "Review your interests";
+  const nextAfterProfile = "/suggestions";
+  const finishLabel = "See your activities";
 
   async function finish() {
     await flushGraphMirror({ profileCompleted: true });
@@ -273,7 +206,6 @@ function SignUpDetails() {
   }
 
   function goPrev() {
-    if (advanceTimer.current) clearTimeout(advanceTimer.current);
     setAttempted(false);
     if (idx > 0) setIdx((i) => i - 1);
     else router.push(fromVoice ? "/voice" : "/themes");
@@ -281,8 +213,6 @@ function SignUpDetails() {
 
   function onSingle(key: FieldKey, value: string) {
     setSignup({ [key]: value });
-    if (advanceTimer.current) clearTimeout(advanceTimer.current);
-    advanceTimer.current = setTimeout(goNext, 260);
   }
 
   function currentValid(): boolean {
@@ -319,8 +249,14 @@ function SignUpDetails() {
 
   // Everything already known (typical for the sample-recording demo path).
   if (total === 0) {
+    const showPipeline =
+      fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
+
     return (
       <AppShell back="/themes" title="Your profile">
+        {showPipeline && (
+          <PipelineStrip stage={pipelineStage} showActivities />
+        )}
         <div className="flex flex-col items-center text-center pt-6">
           <span className="grid place-items-center h-14 w-14 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] mb-4 animate-pop-check">
             <Check size={26} strokeWidth={2.5} />
@@ -362,61 +298,48 @@ function SignUpDetails() {
             <ArrowRight size={16} />
           </span>
         </PrimaryButton>
+
+        {showPipeline && (
+          <ProgressiveResults
+            pipelineStage={pipelineStage}
+            pipelineError={pipelineError}
+            topics={state.topics}
+            suggestedActivities={state.suggestedActivities}
+            similarPeople={similarPeople}
+            showActivities
+            compact
+          />
+        )}
       </AppShell>
     );
   }
 
+  const showPipeline =
+    fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
+
   if (!current) return null;
   const q = QUESTIONS[current];
-  const showLangOther =
-    q.key === "languages_comfortable" &&
-    s.languages_comfortable.includes("Other");
-
-  const processing =
-    pipelineStage !== "idle" &&
-    pipelineStage !== "ready" &&
-    pipelineStage !== "error";
 
   return (
     <AppShell back={fromVoice ? "/voice" : "/themes"} title="Quick profile">
-      {(processing || pipelineStage === "ready" || pipelineError) && (
-        <div
-          className={
-            "card-outline p-3.5 mb-5 flex items-start gap-2.5 " +
-            (pipelineError
-              ? "border-[var(--color-clay)]"
-              : "border-[var(--color-sage)]/30")
-          }
-        >
-          <span className="grid place-items-center h-7 w-7 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
-            <Sparkles size={14} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-medium text-[var(--color-ink)]">
-              {pipelineError
-                ? "Homi hit a snag"
-                : pipelineStageLabel(pipelineStage)}
-            </p>
-            {pipelineError ? (
-              <p className="text-[12px] text-[var(--color-muted)] mt-0.5 leading-relaxed">
+      {showPipeline && (
+        <>
+          <PipelineStrip stage={pipelineStage} showActivities />
+          {pipelineError && (
+            <div className="card-outline p-3 mb-4 flex items-start justify-between gap-3 border-[var(--color-clay)]">
+              <p className="text-[12.5px] text-[var(--color-ink-soft)] leading-relaxed">
                 {pipelineError}
               </p>
-            ) : (
-              <p className="text-[12px] text-[var(--color-muted)] mt-0.5">
-                Keep answering below — no need to wait.
-              </p>
-            )}
-          </div>
-          {pipelineError && (
-            <button
-              type="button"
-              onClick={retryPipeline}
-              className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
-            >
-              Retry
-            </button>
+              <button
+                type="button"
+                onClick={retryPipeline}
+                className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
+              >
+                Retry
+              </button>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Progress: in-flow back + segmented dots + counter */}
@@ -511,28 +434,11 @@ function SignUpDetails() {
                   selected={(s[q.key] as string[]).includes(k)}
                   onToggle={() => {
                     const next = toggleArr(s[q.key] as string[], k);
-                    // The single languages question fills both "comfortable"
-                    // and "spoken" so the graph still gets SPEAKS edges.
-                    if (q.key === "languages_comfortable") {
-                      setSignup({
-                        languages_comfortable: next,
-                        languages_spoken: next,
-                      });
-                    } else {
-                      setSignup({ [q.key]: next });
-                    }
+                    setSignup({ [q.key]: next });
                   }}
                 />
               ))}
             </div>
-            {showLangOther && (
-              <input
-                className="field mt-3"
-                placeholder="Add your language — e.g. Turkish, Italian"
-                value={s.language_other}
-                onChange={(e) => setSignup({ language_other: e.target.value })}
-              />
-            )}
           </>
         )}
 
@@ -554,23 +460,30 @@ function SignUpDetails() {
           <p className="text-[12.5px] text-[var(--color-clay)] mt-3">
             {q.kind === "postcode"
               ? "Enter your postcode."
-              : q.language
-                ? "Pick at least one — and name your other language if you chose Other."
-                : "Pick at least one to continue."}
+              : "Pick at least one to continue."}
           </p>
         )}
       </div>
 
-      {/* Single-select advances on tap; multi / postcode need a confirm. */}
-      {q.kind !== "single" && (
-        <div className="mt-7">
-          <PrimaryButton onClick={onContinue}>
-            <span className="inline-flex items-center justify-center gap-1.5">
-              {idx === total - 1 ? finishLabel : "Continue"}
-              <ArrowRight size={16} />
-            </span>
-          </PrimaryButton>
-        </div>
+      <div className="mt-7">
+        <PrimaryButton onClick={onContinue}>
+          <span className="inline-flex items-center justify-center gap-1.5">
+            {idx === total - 1 ? finishLabel : "Continue"}
+            <ArrowRight size={16} />
+          </span>
+        </PrimaryButton>
+      </div>
+
+      {showPipeline && (
+        <ProgressiveResults
+          pipelineStage={pipelineStage}
+          pipelineError={pipelineError}
+          topics={state.topics}
+          suggestedActivities={state.suggestedActivities}
+          similarPeople={similarPeople}
+          showActivities
+          compact
+        />
       )}
 
       {mode === "demo" && (

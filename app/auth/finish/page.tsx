@@ -28,7 +28,9 @@ export default function AuthFinish() {
     setSignup({ email: verifiedEmail });
     // Already onboarded on this device → straight to the confirmation screen;
     // otherwise begin the voice flow.
-    router.replace(state.topics.length > 0 ? "/collect/done" : "/voice");
+    router.replace(
+      state.topics.length > 0 ? "/suggestions" : "/voice",
+    );
   }
 
   async function finish(emailOverride?: string) {

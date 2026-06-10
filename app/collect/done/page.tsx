@@ -1,9 +1,7 @@
 "use client";
 
-// Terminal screen for the collect build. The user has signed up, recorded
-// their voice, confirmed their interests, and filled the quick profile — all
-// of it is now in the shared graph. There is no matching or activity flow in
-// this build; the whole point was to add one more real person to the network.
+// Terminal screen for the collect build — shown after the user has seen
+// interests, activity ideas, and similar people on /suggestions.
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
