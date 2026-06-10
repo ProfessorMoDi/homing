@@ -239,6 +239,16 @@ export default function Finding() {
         </div>
       </Card>
 
+      {!matchLoading && topMatches.length === 0 && (
+        <Card className="mb-5">
+          <p className="text-[14px] font-medium mb-1">No matches yet</p>
+          <p className="text-[13px] text-[var(--color-ink-soft)] leading-relaxed">
+            Nobody in the network shares these interests yet. As more people
+            sign up, the ones who fit will show up here.
+          </p>
+        </Card>
+      )}
+
       {topMatches.length > 0 && (
         <Card className="mb-5">
           <p className="text-[14px] font-medium mb-3">

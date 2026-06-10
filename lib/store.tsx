@@ -29,6 +29,7 @@ import {
 import { extractFromTranscript } from "./voiceTopics";
 import { setCached, topicSignature } from "./suggestionsCache";
 import {
+  fetchLiveMatch,
   fetchMatchCandidates,
   persistActivity,
   persistAndMatch,
@@ -42,7 +43,7 @@ import {
   syncVoice,
 } from "./neo4jClient";
 import { currentUserContext, DEMO_ID, type UserContext } from "./currentUser";
-import { isCollect } from "./appMode";
+import { isCollect, isDemo } from "./appMode";
 import {
   fillSignupGaps,
   pickArchetype,
@@ -356,7 +357,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setMatchSource("loading");
       const creatorId = activity.creator_user_id || currentUserContext(state.signup).id;
       let graphCandidates: Awaited<ReturnType<typeof fetchMatchCandidates>> = null;
-      if (opts.persist) {
+      if (isDemo()) {
+        // Demo is read-only — rank the real signed-up network by shared
+        // interest instead of writing an Activity node.
+        graphCandidates = await fetchLiveMatch(
+          [...activity.specific_interest_tags, ...activity.broader_interest_tags],
+          creatorId,
+        );
+      } else if (opts.persist) {
         graphCandidates = await persistAndMatch(activity);
       } else {
         graphCandidates = await fetchMatchCandidates(activity.id, creatorId);
@@ -685,7 +693,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       setMatchLoading(true);
       setMatchSource("loading");
-      const graphCandidates = await persistAndMatch(activity);
+      const graphCandidates = isDemo()
+        ? await fetchLiveMatch(
+            [...activity.specific_interest_tags, ...activity.broader_interest_tags],
+            activity.creator_user_id,
+          )
+        : await persistAndMatch(activity);
       ranked = resolveMatchesForActivity(activity, graphCandidates);
       const source: "graph" | "mock" = graphCandidates !== null ? "graph" : "mock";
       setMatches(ranked);

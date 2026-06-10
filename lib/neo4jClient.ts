@@ -254,6 +254,44 @@ export async function fetchMatchCandidates(
   }
 }
 
+// Read-only matcher for the demo: rank the real signed-up network by shared
+// interest, without writing an Activity node. Returns [] when nobody in the
+// graph shares the interests yet (e.g. before any friends have signed up).
+export async function fetchLiveMatch(
+  topics: string[],
+  selfId?: string,
+): Promise<GraphMatchCandidate[] | null> {
+  const clean = topics.filter(Boolean);
+  if (clean.length === 0) return [];
+  try {
+    const r = await fetch("/api/neo4j/match-live", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topics: clean, selfId }),
+    });
+    if (!r.ok) return null;
+    const data = (await r.json()) as {
+      candidates?: Array<{
+        user_id: string;
+        first_name: string;
+        neighbourhood: string;
+        score: number;
+        reasons?: string[];
+      }>;
+    };
+    const list = Array.isArray(data.candidates) ? data.candidates : [];
+    return list.map((c) => ({
+      user_id: c.user_id,
+      first_name: c.first_name,
+      neighbourhood: c.neighbourhood,
+      score: c.score,
+      reasons: c.reasons ?? [],
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export async function persistAndMatch(activity: Activity): Promise<GraphMatchCandidate[] | null> {
   const ok = await persistActivity(activity);
   if (!ok) return null;
