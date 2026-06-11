@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, AlertCircle, Mail } from "lucide-react";
+import { ArrowRight, AlertCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Label, PrimaryButton, SecondaryButton } from "@/components/Bits";
+import { Label, PrimaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { exitDemoSession } from "@/lib/appMode";
+import { SIGNUP_LINK_SENT_KEY } from "@/lib/signupFlow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -46,7 +47,7 @@ export default function SignUp() {
   const router = useRouter();
   const s = state.signup;
 
-  const [phase, setPhase] = useState<"form" | "sending" | "linkSent">("form");
+  const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export default function SignUp() {
   const emailOk = EMAIL_RE.test(s.email);
 
   async function onStart() {
-    if (!baseOk || !emailOk || phase === "sending") return;
+    if (!baseOk || !emailOk || sending) return;
     if (!ready) {
       setError(
         "Sign-in links aren't available here — Firebase env vars are missing. Use production or configure NEXT_PUBLIC_FIREBASE_*.",
@@ -62,24 +63,24 @@ export default function SignUp() {
       return;
     }
     setError(null);
-    setPhase("sending");
+    setSending(true);
     setBusy(true);
     exitDemoSession();
     commitSignup();
     try {
       await sendMagicLink(s.email);
-      setPhase("linkSent");
+      try {
+        sessionStorage.setItem(SIGNUP_LINK_SENT_KEY, s.email);
+      } catch {
+        /* private mode */
+      }
+      router.push("/voice");
     } catch (e) {
       console.error("signup link failed", e);
       setError(magicLinkErrorMessage(e, ready));
-      setPhase("form");
-    } finally {
+      setSending(false);
       setBusy(false);
     }
-  }
-
-  function continueToVoice() {
-    router.push("/voice");
   }
 
   async function onGoogle() {
@@ -103,32 +104,6 @@ export default function SignUp() {
       }
       setBusy(false);
     }
-  }
-
-  if (phase === "linkSent") {
-    return (
-      <AppShell back="/signup" title="Link sent">
-        <div className="flex flex-col items-center text-center pt-8">
-          <span className="grid place-items-center h-14 w-14 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] mb-4 animate-pop-check">
-            <Mail size={26} />
-          </span>
-          <h1 className="display text-[24px] mb-2">Sign-in link sent</h1>
-          <p className="text-[14px] text-[var(--color-ink-soft)] leading-relaxed max-w-[20rem]">
-            We emailed a one-tap link to{" "}
-            <span className="font-medium text-[var(--color-ink)]">{s.email}</span>.
-            Open it anytime to sign back in — you don&apos;t need to click it now.
-          </p>
-        </div>
-        <div className="mt-7">
-          <PrimaryButton onClick={continueToVoice}>
-            <span className="inline-flex items-center justify-center gap-1.5">
-              Continue to voice
-              <ArrowRight size={16} />
-            </span>
-          </PrimaryButton>
-        </div>
-      </AppShell>
-    );
   }
 
   return (
@@ -202,7 +177,7 @@ export default function SignUp() {
         disabled={!baseOk || !emailOk || busy || !ready}
       >
         <span className="inline-flex items-center justify-center gap-1.5">
-          {phase === "sending" ? "Sending link…" : "Start"}
+          {sending ? "Sending link…" : "Start"}
           <ArrowRight size={16} />
         </span>
       </PrimaryButton>

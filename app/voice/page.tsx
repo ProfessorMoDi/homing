@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, Square, Sparkles, AlertCircle, FastForward } from "lucide-react";
+import { Mic, Square, Sparkles, AlertCircle, FastForward, Mail } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Pigeon } from "@/components/Pigeon";
 import { SkyScene } from "@/components/SkyScene";
 import { PrimaryButton, SecondaryButton, PrivacyNote } from "@/components/Bits";
+import { SIGNUP_LINK_SENT_KEY } from "@/lib/signupFlow";
 import { useApp } from "@/lib/store";
 import { stashAudio } from "@/lib/audioStash";
 import { useAppMode } from "@/lib/useAppMode";
@@ -24,6 +25,19 @@ export default function VoiceOnboarding() {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const email = sessionStorage.getItem(SIGNUP_LINK_SENT_KEY);
+      if (email) {
+        setLinkSentTo(email);
+        sessionStorage.removeItem(SIGNUP_LINK_SENT_KEY);
+      }
+    } catch {
+      /* private mode */
+    }
+  }, []);
 
   const interval = useRef<ReturnType<typeof setInterval> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -224,6 +238,16 @@ export default function VoiceOnboarding() {
 
   return (
     <AppShell back="/signup" title="Voice onboarding">
+      {linkSentTo && (
+        <div className="card-outline p-3 mb-4 flex items-start gap-2 border-[var(--color-sage)]/40 bg-[var(--color-sage-soft)]/40">
+          <Mail size={15} className="text-[var(--color-sage-deep)] mt-0.5 shrink-0" />
+          <p className="text-[12.5px] text-[var(--color-ink-soft)] leading-relaxed">
+            Sign-in link sent to{" "}
+            <span className="font-medium text-[var(--color-ink)]">{linkSentTo}</span>
+            . Open it anytime — you don&apos;t need to click it now.
+          </p>
+        </div>
+      )}
       <p className="text-[14px] text-[var(--color-ink-soft)] mb-3 text-center">
         Aim for about 30 seconds — say several interests.
       </p>

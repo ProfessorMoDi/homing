@@ -197,7 +197,7 @@ export default function Suggestions() {
   }
 
   return (
-    <AppShell back="/signup/details" title="Suggested for you">
+    <AppShell back="/themes" title="Suggested for you">
       <h1 className="display text-[28px] leading-tight mb-1">
         Suggested for you
       </h1>
@@ -303,7 +303,12 @@ export default function Suggestions() {
       ) : (
         <div className="grid gap-4 stagger">
           {cards.map((a) => (
-            <Card key={a.id} interactive>
+            <Card
+              key={a.id}
+              interactive
+              className="cursor-pointer"
+              onClick={() => start(a)}
+            >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <p className="display text-[19px] leading-tight">{a.title}</p>
                 <span className="pill !bg-[var(--color-sage-soft)] !text-[var(--color-sage-deep)] !border-transparent">
@@ -341,7 +346,7 @@ export default function Suggestions() {
                     <Pill key={t}>{t}</Pill>
                   ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => start(a)}
                   className="btn-primary !py-2.5 !text-[13.5px] flex-1"
@@ -354,12 +359,6 @@ export default function Suggestions() {
                 >
                   Edit
                 </button>
-                <button
-                  onClick={() => router.back()}
-                  className="btn-ghost !text-[13.5px]"
-                >
-                  Not now
-                </button>
               </div>
             </Card>
           ))}
@@ -367,11 +366,12 @@ export default function Suggestions() {
       )}
 
       {hasLiveTranscript && (
-        <section className="mt-8 pt-6 border-t border-[var(--color-line)]">
-          <h2 className="display text-[20px] mb-1">Who is similar to you?</h2>
-          <p className="text-[13px] text-[var(--color-muted)] mb-4">
-            People in the network who share your interests — overlap, not a
-            perfect match yet.
+        <section className="mt-10 pt-5 border-t border-[var(--color-line)]/80">
+          <h2 className="text-[16px] font-medium text-[var(--color-ink-soft)] mb-0.5">
+            Who is similar to you?
+          </h2>
+          <p className="text-[12px] text-[var(--color-muted)] mb-3">
+            Optional — people in the network who share your interests.
           </p>
           {peopleLoading ? (
             <div className="grid gap-3">

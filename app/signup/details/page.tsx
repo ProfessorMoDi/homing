@@ -1,18 +1,16 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, RotateCcw, Sparkles } from "lucide-react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Check, Quote, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
+import { Card, ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { HomiWaitingCarousel } from "@/components/HomiWaitingCarousel";
+import { ThinkingDots } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
 import { pipelineStageLabel } from "@/lib/voicePipeline";
-import {
-  PipelineStrip,
-  ProgressiveResults,
-} from "@/components/OnboardingProgress";
+import { PipelineStrip } from "@/components/OnboardingProgress";
 
 const GENDER = [
   ["male", "Male"],
@@ -110,30 +108,11 @@ function snapshotSteps(
   return order.filter((k) => !isDone(k, signup));
 }
 
-function ProfileProceedButton({
-  label,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <PrimaryButton onClick={onClick} disabled={disabled}>
-      <span className="inline-flex items-center justify-center gap-1.5">
-        {label}
-        {!disabled && <ArrowRight size={16} />}
-      </span>
-    </PrimaryButton>
-  );
-}
 function isDone(key: FieldKey, s: Signup): boolean {
   switch (key) {
     case "gender":
       return !!s.gender;
     case "postcode":
-      // Accept any country's postcode — not everyone is Dutch.
       return s.postcode.trim().length >= 3;
     case "availability":
       return s.availability.length > 0;
@@ -142,11 +121,39 @@ function isDone(key: FieldKey, s: Signup): boolean {
   }
 }
 
+function TranscriptSnippet({ transcript }: { transcript: string }) {
+  const preview = transcript
+    .trim()
+    .split(/\s+/)
+    .slice(0, 22)
+    .join(" ");
+  if (!preview) return null;
+
+  return (
+    <Card className="mb-5 animate-fade-in-soft">
+      <div className="flex items-start gap-3">
+        <span className="grid place-items-center h-8 w-8 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+          <Quote size={14} />
+        </span>
+        <div>
+          <p className="text-[11.5px] uppercase tracking-wider text-[var(--color-muted)] mb-1">
+            What Homi heard
+          </p>
+          <p className="text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed italic">
+            &ldquo;{preview}
+            {transcript.length > preview.length ? "…" : ""}&rdquo;
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function SignUpDetailsPage() {
   return (
     <Suspense
       fallback={
-        <AppShell back="/voice" title="Quick profile">
+        <AppShell back="/voice" title="Homi is listening">
           <div className="flex items-center justify-center min-h-[40dvh] text-[13px] text-[var(--color-muted)]">
             Loading…
           </div>
@@ -163,151 +170,97 @@ function SignUpDetails() {
     state,
     setSignup,
     flushGraphMirror,
-    refreshSimilarPeople,
     fillSignupRandom,
-    setSuggestedActivities,
     hydrated,
     pipelineStage,
     pipelineError,
     retryPipeline,
-    similarPeople,
   } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromVoice = searchParams.get("fromVoice") === "1";
   const s = state.signup;
   const profileSessionId = state.profileSessionId;
+  const autoAdvancedRef = useRef(false);
 
   const [steps, setSteps] = useState<FieldKey[] | null>(null);
   const [snapshottedFor, setSnapshottedFor] = useState<number | null>(null);
   const [idx, setIdx] = useState(0);
   const [attempted, setAttempted] = useState(false);
-  const [finishing, setFinishing] = useState(false);
-  const [suggestRetrying, setSuggestRetrying] = useState(false);
+  const [questionsComplete, setQuestionsComplete] = useState(false);
+
+  const profileBack = fromVoice ? "/voice" : "/themes";
+  const pageTitle = fromVoice ? "Homi is listening" : "Quick profile";
 
   useEffect(() => {
-    if (fromVoice) router.prefetch("/suggestions");
+    if (fromVoice) router.prefetch("/themes");
   }, [fromVoice, router]);
+
+  useEffect(() => {
+    autoAdvancedRef.current = false;
+    setQuestionsComplete(false);
+    setIdx(0);
+    setAttempted(false);
+  }, [profileSessionId]);
 
   useEffect(() => {
     if (!hydrated) return;
     if (snapshottedFor === profileSessionId && steps !== null) return;
+    const snap = snapshotSteps(fromVoice, state.signup, state.missingFields);
     setSnapshottedFor(profileSessionId);
-    setSteps(snapshotSteps(fromVoice, state.signup, state.missingFields));
+    setSteps(snap);
     setIdx(0);
-    // One-shot snapshot per voice session — omit signup from deps on purpose.
+    if (snap.length === 0) setQuestionsComplete(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, profileSessionId, fromVoice]);
 
   const total = steps?.length ?? 0;
   const current = steps?.[idx];
 
-  // What the voice pass already filled in — shown as reassurance on the first
-  // screen so the form feels like a confirmation, not an interrogation.
-  // Recomputed once hydration lands so it reflects the real pre-filled values.
   const heard = useMemo(() => {
     const items: string[] = [];
-    const topicTitles = state.topics
-      .filter((t) => !t.hidden)
-      .map((t) => t.title);
-    if (topicTitles.length > 0) {
-      const shown =
-        topicTitles.length > 6
-          ? `${topicTitles.slice(0, 6).join(", ")} +${topicTitles.length - 6} more`
-          : topicTitles.join(", ");
-      items.push(`Interests · ${shown}`);
-    }
     if (s.availability.length)
       items.push(
         `Availability · ${s.availability.map((a) => LABELS[a] ?? a).join(", ")}`,
       );
     if (s.commitment) items.push(`Rhythm · ${LABELS[s.commitment] ?? s.commitment}`);
     return items;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, state.topics, state.missingFields]);
+  }, [s.availability, s.commitment]);
+
+  const showPipeline =
+    fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
+
+  const pipelineWorking =
+    pipelineStage !== "idle" &&
+    pipelineStage !== "ready" &&
+    pipelineStage !== "error";
+
+  const topicsReady = state.topics.length > 0;
+  const waitingOnTopics =
+    questionsComplete && !topicsReady && pipelineStage !== "error";
+
+  useEffect(() => {
+    if (!questionsComplete || !topicsReady || autoAdvancedRef.current) return;
+    autoAdvancedRef.current = true;
+    void flushGraphMirror({ profileCompleted: true });
+    const t = setTimeout(() => router.push("/themes"), 1200);
+    return () => clearTimeout(t);
+  }, [questionsComplete, topicsReady, flushGraphMirror, router]);
 
   const toggleArr = (arr: string[], key: string) =>
     arr.includes(key) ? arr.filter((x) => x !== key) : [...arr, key];
 
   const mode = useAppMode();
-  const nextAfterProfile = "/suggestions";
-  const finishLabel = "See your activities";
 
-  const activitiesReady = state.suggestedActivities.length > 0;
-  const activitiesLoading =
-    pipelineStage === "planning" ||
-    pipelineStage === "understanding" ||
-    pipelineStage === "syncing" ||
-    pipelineStage === "transcribing";
-  const canProceedToSuggestions =
-    activitiesReady && !activitiesLoading && !suggestRetrying;
-  const pipelineWorking =
-    pipelineStage !== "idle" &&
-    pipelineStage !== "ready" &&
-    pipelineStage !== "error";
-  const suggestFailed =
-    (pipelineStage === "ready" || pipelineStage === "error") &&
-    !activitiesReady &&
-    !activitiesLoading;
-
-  function proceedLabel(isLast: boolean): string {
-    if (finishing) return "Opening your activities…";
-    if (isLast && !canProceedToSuggestions) {
-      if (suggestRetrying) return "Retrying activities…";
-      if (activitiesLoading) return pipelineStageLabel(pipelineStage);
-      if (suggestFailed) return finishLabel;
-      return "Homi is drafting activities…";
-    }
-    return isLast ? finishLabel : "Continue";
-  }
-
-  async function retrySuggest() {
-    const visibleTopics = state.topics
-      .filter((t) => !t.hidden)
-      .map((t) => ({
-        title: t.title,
-        explanation: t.explanation,
-        tags: t.tags,
-      }));
-    if (visibleTopics.length === 0) return;
-    setSuggestRetrying(true);
-    try {
-      const r = await fetch("/api/suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topics: visibleTopics,
-          transcript: state.transcript,
-          availability_hints: state.signup.availability,
-          minor_interests: state.minorInterests,
-        }),
-      });
-      if (!r.ok) throw new Error(`Suggest failed (${r.status})`);
-      const data = (await r.json()) as {
-        activities?: Parameters<typeof setSuggestedActivities>[0];
-      };
-      const list = Array.isArray(data.activities) ? data.activities : [];
-      if (list.length === 0) throw new Error("Empty activities");
-      setSuggestedActivities(list);
-    } catch (err) {
-      console.warn("Profile suggest retry failed", err);
-    } finally {
-      setSuggestRetrying(false);
-    }
-  }
-
-  function finish() {
-    if (finishing || !canProceedToSuggestions) return;
-    setFinishing(true);
+  function completeQuestions() {
+    setQuestionsComplete(true);
     void flushGraphMirror({ profileCompleted: true });
-    void refreshSimilarPeople();
-    router.push(nextAfterProfile);
   }
 
   function goNext() {
     setAttempted(false);
     if (idx < total - 1) setIdx((i) => i + 1);
-    else finish();
+    else completeQuestions();
   }
 
   function goPrev() {
@@ -333,54 +286,48 @@ function SignUpDetails() {
     goNext();
   }
 
-  async function useSampleDetails() {
+  function useSampleDetails() {
     fillSignupRandom();
-    if (!canProceedToSuggestions) return;
-    setFinishing(true);
-    void flushGraphMirror({ profileCompleted: true });
-    void refreshSimilarPeople();
-    router.push(nextAfterProfile);
+    completeQuestions();
   }
 
-  function renderPipelineExtras(showPipeline: boolean) {
-    if (!showPipeline) return null;
+  function renderWaitBody() {
     return (
       <>
-        {pipelineWorking && (
-          <div className="mt-6">
-            <HomiWaitingCarousel />
-          </div>
+        <div className="flex flex-col items-center text-center pt-4 mb-5">
+          <h1 className="display text-[23px] mb-1.5">
+            {topicsReady ? "Interests ready" : "Homi is working"}
+          </h1>
+          <p className="text-[14px] text-[var(--color-ink-soft)] leading-relaxed max-w-[20rem]">
+            {topicsReady
+              ? "Taking you to review what Homi heard…"
+              : waitingOnTopics
+                ? pipelineStageLabel(pipelineStage)
+                : "A few pigeon facts while Homi reads your voice."}
+          </p>
+          {topicsReady && (
+            <p className="text-[12px] text-[var(--color-sage-deep)] mt-2 inline-flex items-center gap-1">
+              <ThinkingDots size="small" />
+            </p>
+          )}
+        </div>
+
+        {state.transcript.trim() && (
+          <TranscriptSnippet transcript={state.transcript} />
         )}
-        <ProgressiveResults
-          pipelineStage={pipelineStage}
-          pipelineError={pipelineError}
-          topics={state.topics}
-          suggestedActivities={state.suggestedActivities}
-          similarPeople={similarPeople}
-          showActivities
-          compact
-        />
-        {suggestFailed && (
-          <div className="mt-3">
-            <SecondaryButton
-              onClick={suggestRetrying ? undefined : retrySuggest}
-            >
-              <RotateCcw size={15} />
-              {suggestRetrying ? "Retrying…" : "Try again"}
-            </SecondaryButton>
+
+        {(pipelineWorking || waitingOnTopics) && (
+          <div className="mt-2">
+            <HomiWaitingCarousel />
           </div>
         )}
       </>
     );
   }
 
-  const profileBack = fromVoice ? "/voice" : "/themes";
-
-  // Wait for the one-shot snapshot (taken after hydration) before deciding
-  // which questions to show.
   if (steps === null) {
     return (
-      <AppShell back={profileBack} title="Quick profile">
+      <AppShell back={profileBack} title={pageTitle}>
         <div className="flex items-center justify-center min-h-[40dvh] text-[13px] text-[var(--color-muted)]">
           Loading your profile…
         </div>
@@ -388,73 +335,44 @@ function SignUpDetails() {
     );
   }
 
-  // Everything already known (typical for the sample-recording demo path).
-  if (total === 0) {
-    const showPipeline =
-      fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
-
+  if (questionsComplete) {
     return (
-      <AppShell back={profileBack} title="Your profile">
+      <AppShell back={profileBack} title={pageTitle}>
         {showPipeline && (
-          <PipelineStrip stage={pipelineStage} showActivities />
-        )}
-        <div className="flex flex-col items-center text-center pt-6">
-          <span className="grid place-items-center h-14 w-14 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] mb-4 animate-pop-check">
-            <Check size={26} strokeWidth={2.5} />
-          </span>
-          <h1 className="display text-[23px] mb-1.5">You&apos;re all set</h1>
-          <p className="text-[14px] text-[var(--color-ink-soft)] leading-relaxed max-w-[19rem]">
-            Homi picked up everything it needed from your voice — nothing else
-            to fill in.
-          </p>
-        </div>
-
-        <div className="card-outline p-4 mt-6 mb-7 grid gap-2.5">
-          {heard.map((line) => {
-            const [head, rest] = line.split(" · ");
-            return (
-              <div key={head} className="flex items-start gap-2.5">
-                <Check
-                  size={15}
-                  strokeWidth={2.5}
-                  className="text-[var(--color-sage-deep)] mt-0.5 shrink-0"
-                />
-                <p className="text-[13.5px] text-[var(--color-ink-soft)]">
-                  <span className="text-[var(--color-muted)]">{head}: </span>
-                  {rest}
+          <>
+            <PipelineStrip stage={pipelineStage} showActivities={false} />
+            {pipelineError && (
+              <div className="card-outline p-3 mb-4 flex items-start justify-between gap-3 border-[var(--color-clay)]">
+                <p className="text-[12.5px] text-[var(--color-ink-soft)] leading-relaxed">
+                  {pipelineError}
                 </p>
+                <button
+                  type="button"
+                  onClick={retryPipeline}
+                  className="text-[12px] font-medium text-[var(--color-sage-deep)] shrink-0"
+                >
+                  Retry
+                </button>
               </div>
-            );
-          })}
-          {heard.length === 0 && (
-            <p className="text-[13.5px] text-[var(--color-ink-soft)]">
-              Your profile is complete.
-            </p>
-          )}
-        </div>
-
-        <ProfileProceedButton
-          label={proceedLabel(true)}
-          onClick={finish}
-          disabled={!canProceedToSuggestions || finishing}
-        />
-
-        {renderPipelineExtras(showPipeline)}
+            )}
+          </>
+        )}
+        {renderWaitBody()}
+        <p className="text-[12px] text-[var(--color-muted)] text-center mt-6">
+          You control what is used.
+        </p>
       </AppShell>
     );
   }
-
-  const showPipeline =
-    fromVoice || pipelineStage !== "idle" || !!state.transcript.trim();
 
   if (!current) return null;
   const q = QUESTIONS[current];
 
   return (
-    <AppShell back={fromVoice ? "/voice" : "/themes"} title="Quick profile">
+    <AppShell back={profileBack} title={pageTitle}>
       {showPipeline && (
         <>
-          <PipelineStrip stage={pipelineStage} showActivities />
+          <PipelineStrip stage={pipelineStage} showActivities={false} />
           {pipelineError && (
             <div className="card-outline p-3 mb-4 flex items-start justify-between gap-3 border-[var(--color-clay)]">
               <p className="text-[12.5px] text-[var(--color-ink-soft)] leading-relaxed">
@@ -472,7 +390,10 @@ function SignUpDetails() {
         </>
       )}
 
-      {/* Progress: in-flow back + segmented dots + counter */}
+      {state.transcript.trim() && (
+        <TranscriptSnippet transcript={state.transcript} />
+      )}
+
       <div className="flex items-center gap-3 mb-7">
         <button
           aria-label="Previous question"
@@ -492,7 +413,6 @@ function SignUpDetails() {
         </span>
       </div>
 
-      {/* Voice-extracted reassurance, only on the first question */}
       {idx === 0 && heard.length > 0 && (
         <div className="card-outline p-3.5 mb-6 flex items-start gap-2.5">
           <span className="grid place-items-center h-7 w-7 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
@@ -555,21 +475,19 @@ function SignUpDetails() {
         )}
 
         {q.kind === "multi" && (
-          <>
-            <div className="seg">
-              {q.options!.map(([k, v]) => (
-                <ChipToggle
-                  key={k}
-                  label={v}
-                  selected={(s[q.key] as string[]).includes(k)}
-                  onToggle={() => {
-                    const next = toggleArr(s[q.key] as string[], k);
-                    setSignup({ [q.key]: next });
-                  }}
-                />
-              ))}
-            </div>
-          </>
+          <div className="seg">
+            {q.options!.map(([k, v]) => (
+              <ChipToggle
+                key={k}
+                label={v}
+                selected={(s[q.key] as string[]).includes(k)}
+                onToggle={() => {
+                  const next = toggleArr(s[q.key] as string[], k);
+                  setSignup({ [q.key]: next });
+                }}
+              />
+            ))}
+          </div>
         )}
 
         {q.kind === "postcode" && (
@@ -596,17 +514,19 @@ function SignUpDetails() {
       </div>
 
       <div className="mt-7">
-        <ProfileProceedButton
-          label={proceedLabel(idx === total - 1)}
-          onClick={onContinue}
-          disabled={
-            finishing ||
-            (idx === total - 1 && !canProceedToSuggestions)
-          }
-        />
+        <PrimaryButton onClick={onContinue}>
+          <span className="inline-flex items-center justify-center gap-1.5">
+            {idx === total - 1 ? "Continue" : "Continue"}
+            <ArrowRight size={16} />
+          </span>
+        </PrimaryButton>
       </div>
 
-      {renderPipelineExtras(showPipeline)}
+      {showPipeline && pipelineWorking && (
+        <div className="mt-6">
+          <HomiWaitingCarousel />
+        </div>
+      )}
 
       {mode === "demo" && (
         <div className="mt-3">

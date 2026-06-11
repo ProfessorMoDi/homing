@@ -43,7 +43,7 @@ export default function AuthFinish() {
     if (state.topics.length > 0) {
       router.replace(
         profileLooksComplete(state.signup)
-          ? "/suggestions"
+          ? "/themes"
           : "/signup/details?fromVoice=1",
       );
       return;

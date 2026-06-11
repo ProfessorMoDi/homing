@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, X, RotateCcw, Sparkles, Check } from "lucide-react";
+import { Pencil, X, RotateCcw, Sparkles, Check, ChevronDown, ChevronUp, Quote } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
@@ -41,11 +41,12 @@ export default function Themes() {
   const mode = useAppMode();
   const showDemoSample = mode === "demo";
 
-  const canContinue =
-    state.topics.length > 0 ||
-    state.suggestedActivities.length > 0 ||
-    regen === "ready" ||
-    regen === "error";
+  const canContinue = state.topics.length > 0;
+
+  const profileBack =
+    state.transcript.trim() || pipelineStage !== "idle"
+      ? "/signup/details?fromVoice=1"
+      : "/signup/details";
 
   // Warm the next two routes so the transition is instant once they tap.
   useEffect(() => {
@@ -170,7 +171,7 @@ export default function Themes() {
     const showSample = showDemoSample;
     if (pipelineBusy || (hasTranscript && !pipelineError)) {
       return (
-        <AppShell back="/signup/details" title="Main themes">
+        <AppShell back={profileBack} title="Main themes">
           <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
           <p className="text-[13.5px] text-[var(--color-muted)] mb-5">
             {pipelineStageLabel(pipelineStage)}
@@ -187,7 +188,7 @@ export default function Themes() {
       );
     }
     return (
-      <AppShell back="/signup/details" title="Main themes">
+      <AppShell back={profileBack} title="Main themes">
         <div className="card p-6 text-center">
           <p className="text-[14px] text-[var(--color-ink-soft)] mb-4 leading-relaxed">
             {pipelineError
@@ -215,7 +216,7 @@ export default function Themes() {
   }
 
   return (
-    <AppShell back="/signup/details" title="Main themes">
+    <AppShell back={profileBack} title="Main themes">
       <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-2">
         Everything you mentioned — edit, remove, or hide anything that doesn&apos;t
@@ -227,6 +228,9 @@ export default function Themes() {
           {state.suggestedActivities.length > 0 &&
             ` → ${state.suggestedActivities.length} activity ideas`}
         </p>
+      )}
+      {state.transcript.trim() && (
+        <TranscriptCollapsible transcript={state.transcript} />
       )}
       {state.companionReflection && (
         <div className="card-outline p-3.5 mb-4 text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
@@ -364,6 +368,42 @@ export default function Themes() {
         </Link>
       </div>
     </AppShell>
+  );
+}
+
+function TranscriptCollapsible({ transcript }: { transcript: string }) {
+  const [open, setOpen] = useState(false);
+  const preview = transcript.trim().split(/\s+/).slice(0, 28).join(" ");
+  const truncated = transcript.trim().length > preview.length + 4;
+
+  return (
+    <Card className="mb-4 !p-0 overflow-hidden">
+      <button
+        type="button"
+        className="w-full flex items-start gap-3 p-3.5 text-left"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="grid place-items-center h-8 w-8 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] shrink-0">
+          <Quote size={14} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11.5px] uppercase tracking-wider text-[var(--color-muted)] mb-1">
+            What you said
+          </p>
+          <p
+            className={
+              "text-[13px] text-[var(--color-ink-soft)] leading-relaxed " +
+              (open ? "whitespace-pre-line" : "line-clamp-2 italic")
+            }
+          >
+            {open ? transcript.trim() : `“${preview}${truncated ? "…" : ""}”`}
+          </p>
+        </div>
+        <span className="text-[var(--color-muted)] shrink-0 mt-1">
+          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </span>
+      </button>
+    </Card>
   );
 }
 
