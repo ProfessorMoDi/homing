@@ -109,6 +109,7 @@ export default function Themes() {
           transcript: state.transcript,
           availability_hints: state.signup.availability,
           minor_interests: state.minorInterests,
+          limit: 12,
         }),
       });
       if (!r.ok) throw new Error(`Suggest failed (${r.status})`);

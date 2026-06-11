@@ -8,7 +8,7 @@ const SYSTEM_PROMPT = `You generate concrete activity suggestions for a young ad
 
 You'll receive a list of topics the user cares about (each with a title, explanation, and tags), plus their comfortable languages and availability hints.
 
-Output an object: { activities: [...] }. Generate one or more grounded suggestions for AS MANY of their topics as you can — MORE IS BETTER. If they care about ten things, lean toward ten or more suggestions so they feel fully understood. Never invent a topic they didn't give. Each activity is:
+Output an object: { activities: [...] }. Generate exactly 3 to 5 diverse, grounded activity suggestions — pick different topics where possible so the user feels understood without overwhelming them. Never invent a topic they didn't give. Each activity is:
 - title: action-oriented, 2–6 words (e.g. "Start a Catan round", "Slow Saturday photo walk", "Cook a new dish together")
 - description: one short sentence about what would happen
 - day: realistic day of week (e.g. "Thursday", "Saturday")
@@ -62,7 +62,7 @@ function clampInt(v: unknown, min: number, max: number, fallback: number): numbe
   return Math.max(min, Math.min(max, Math.round(n)));
 }
 
-function coerceActivities(raw: unknown): SuggestedActivity[] {
+function coerceActivities(raw: unknown, max = 6): SuggestedActivity[] {
   const r = (raw ?? {}) as Record<string, unknown>;
   if (!Array.isArray(r.activities)) return [];
   return (r.activities as Record<string, unknown>[])
@@ -102,7 +102,7 @@ function coerceActivities(raw: unknown): SuggestedActivity[] {
       broader_interest_tags: lowerList(a.broader_interest_tags, 3),
       reason: typeof a.reason === "string" ? a.reason.slice(0, 200) : "",
     }))
-    .slice(0, 40);
+    .slice(0, max);
 }
 
 interface TopicIn {
@@ -117,6 +117,7 @@ function buildUserMessage(body: {
   languages?: string[];
   availability_hints?: string[];
   minor_interests?: string[];
+  limit?: number;
 }): string {
   const lines: string[] = [];
   if (body.transcript?.trim()) {
@@ -143,8 +144,9 @@ function buildUserMessage(body: {
     lines.push(`Availability: ${body.availability_hints.join("; ")}`);
   }
   lines.push("");
+  const count = body.limit && body.limit > 6 ? body.limit : 5;
   lines.push(
-    "Now generate a grounded activity suggestion for as many of these topics as you can — more is better, cover everything they mentioned.",
+    `Now generate exactly ${count} grounded activity suggestions — diverse topics, concise JSON.`,
   );
   return lines.join("\n");
 }
@@ -165,6 +167,7 @@ export async function POST(req: NextRequest) {
     languages?: unknown;
     availability_hints?: unknown;
     minor_interests?: unknown;
+    limit?: unknown;
   };
   try {
     body = await req.json();
@@ -194,6 +197,11 @@ export async function POST(req: NextRequest) {
   const transcript =
     typeof body.transcript === "string" ? body.transcript.trim() : undefined;
 
+  const limit =
+    typeof body.limit === "number" && Number.isFinite(body.limit)
+      ? Math.max(3, Math.min(40, Math.round(body.limit)))
+      : undefined;
+
   const userMessage = buildUserMessage({
     topics,
     transcript,
@@ -206,6 +214,7 @@ export async function POST(req: NextRequest) {
     minor_interests: Array.isArray(body.minor_interests)
       ? (body.minor_interests as unknown[]).map((x) => String(x)).slice(0, 6)
       : undefined,
+    limit,
   });
 
   const r = await fetch(`${baseUrl}/chat/completions`, {
@@ -274,6 +283,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const activities = coerceActivities(parsed);
+  const activities = coerceActivities(parsed, limit ?? 6);
   return NextResponse.json({ activities });
 }

@@ -2,11 +2,13 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, RotateCcw, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ChipToggle, PrimaryButton, SecondaryButton } from "@/components/Bits";
+import { HomiWaitingCarousel } from "@/components/HomiWaitingCarousel";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
+import { pipelineStageLabel } from "@/lib/voicePipeline";
 import {
   PipelineStrip,
   ProgressiveResults,
@@ -94,6 +96,38 @@ function profileQuestionOrder(_missingFields: string[]): FieldKey[] {
   return ["gender", "postcode", "availability", "commitment"];
 }
 
+function snapshotSteps(
+  fromVoice: boolean,
+  signup: Signup,
+  missingFields: string[],
+): FieldKey[] {
+  const order = profileQuestionOrder(missingFields);
+  if (fromVoice) {
+    return order.filter(
+      (k) => k === "gender" || k === "postcode" || !isDone(k, signup),
+    );
+  }
+  return order.filter((k) => !isDone(k, signup));
+}
+
+function ProfileProceedButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <PrimaryButton onClick={onClick} disabled={disabled}>
+      <span className="inline-flex items-center justify-center gap-1.5">
+        {label}
+        {!disabled && <ArrowRight size={16} />}
+      </span>
+    </PrimaryButton>
+  );
+}
 function isDone(key: FieldKey, s: Signup): boolean {
   switch (key) {
     case "gender":
@@ -128,10 +162,10 @@ function SignUpDetails() {
   const {
     state,
     setSignup,
-    commitSignup,
     flushGraphMirror,
     refreshSimilarPeople,
     fillSignupRandom,
+    setSuggestedActivities,
     hydrated,
     pipelineStage,
     pipelineError,
@@ -142,22 +176,28 @@ function SignUpDetails() {
   const searchParams = useSearchParams();
   const fromVoice = searchParams.get("fromVoice") === "1";
   const s = state.signup;
+  const profileSessionId = state.profileSessionId;
 
   const [steps, setSteps] = useState<FieldKey[] | null>(null);
-
-  // Snapshot unanswered questions once after hydration. Recomputing on every
-  // keystroke removed a field from the list as soon as isDone flipped true,
-  // which made idx jump to the next question before the user tapped Continue.
-  useEffect(() => {
-    if (!hydrated || steps !== null) return;
-    setSteps(
-      profileQuestionOrder(state.missingFields).filter(
-        (k) => !isDone(k, state.signup),
-      ),
-    );
-  }, [hydrated, state.signup, state.missingFields, steps]);
+  const [snapshottedFor, setSnapshottedFor] = useState<number | null>(null);
   const [idx, setIdx] = useState(0);
   const [attempted, setAttempted] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [suggestRetrying, setSuggestRetrying] = useState(false);
+
+  useEffect(() => {
+    if (fromVoice) router.prefetch("/suggestions");
+  }, [fromVoice, router]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (snapshottedFor === profileSessionId && steps !== null) return;
+    setSnapshottedFor(profileSessionId);
+    setSteps(snapshotSteps(fromVoice, state.signup, state.missingFields));
+    setIdx(0);
+    // One-shot snapshot per voice session — omit signup from deps on purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, profileSessionId, fromVoice]);
 
   const total = steps?.length ?? 0;
   const current = steps?.[idx];
@@ -193,8 +233,73 @@ function SignUpDetails() {
   const nextAfterProfile = "/suggestions";
   const finishLabel = "See your activities";
 
-  async function finish() {
-    await flushGraphMirror({ profileCompleted: true });
+  const activitiesReady = state.suggestedActivities.length > 0;
+  const activitiesLoading =
+    pipelineStage === "planning" ||
+    pipelineStage === "understanding" ||
+    pipelineStage === "syncing" ||
+    pipelineStage === "transcribing";
+  const canProceedToSuggestions =
+    activitiesReady && !activitiesLoading && !suggestRetrying;
+  const pipelineWorking =
+    pipelineStage !== "idle" &&
+    pipelineStage !== "ready" &&
+    pipelineStage !== "error";
+  const suggestFailed =
+    (pipelineStage === "ready" || pipelineStage === "error") &&
+    !activitiesReady &&
+    !activitiesLoading;
+
+  function proceedLabel(isLast: boolean): string {
+    if (finishing) return "Opening your activities…";
+    if (isLast && !canProceedToSuggestions) {
+      if (suggestRetrying) return "Retrying activities…";
+      if (activitiesLoading) return pipelineStageLabel(pipelineStage);
+      if (suggestFailed) return finishLabel;
+      return "Homi is drafting activities…";
+    }
+    return isLast ? finishLabel : "Continue";
+  }
+
+  async function retrySuggest() {
+    const visibleTopics = state.topics
+      .filter((t) => !t.hidden)
+      .map((t) => ({
+        title: t.title,
+        explanation: t.explanation,
+        tags: t.tags,
+      }));
+    if (visibleTopics.length === 0) return;
+    setSuggestRetrying(true);
+    try {
+      const r = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: visibleTopics,
+          transcript: state.transcript,
+          availability_hints: state.signup.availability,
+          minor_interests: state.minorInterests,
+        }),
+      });
+      if (!r.ok) throw new Error(`Suggest failed (${r.status})`);
+      const data = (await r.json()) as {
+        activities?: Parameters<typeof setSuggestedActivities>[0];
+      };
+      const list = Array.isArray(data.activities) ? data.activities : [];
+      if (list.length === 0) throw new Error("Empty activities");
+      setSuggestedActivities(list);
+    } catch (err) {
+      console.warn("Profile suggest retry failed", err);
+    } finally {
+      setSuggestRetrying(false);
+    }
+  }
+
+  function finish() {
+    if (finishing || !canProceedToSuggestions) return;
+    setFinishing(true);
+    void flushGraphMirror({ profileCompleted: true });
     void refreshSimilarPeople();
     router.push(nextAfterProfile);
   }
@@ -230,9 +335,43 @@ function SignUpDetails() {
 
   async function useSampleDetails() {
     fillSignupRandom();
-    await flushGraphMirror({ profileCompleted: true });
+    if (!canProceedToSuggestions) return;
+    setFinishing(true);
+    void flushGraphMirror({ profileCompleted: true });
     void refreshSimilarPeople();
     router.push(nextAfterProfile);
+  }
+
+  function renderPipelineExtras(showPipeline: boolean) {
+    if (!showPipeline) return null;
+    return (
+      <>
+        {pipelineWorking && (
+          <div className="mt-6">
+            <HomiWaitingCarousel />
+          </div>
+        )}
+        <ProgressiveResults
+          pipelineStage={pipelineStage}
+          pipelineError={pipelineError}
+          topics={state.topics}
+          suggestedActivities={state.suggestedActivities}
+          similarPeople={similarPeople}
+          showActivities
+          compact
+        />
+        {suggestFailed && (
+          <div className="mt-3">
+            <SecondaryButton
+              onClick={suggestRetrying ? undefined : retrySuggest}
+            >
+              <RotateCcw size={15} />
+              {suggestRetrying ? "Retrying…" : "Try again"}
+            </SecondaryButton>
+          </div>
+        )}
+      </>
+    );
   }
 
   const profileBack = fromVoice ? "/voice" : "/themes";
@@ -294,24 +433,13 @@ function SignUpDetails() {
           )}
         </div>
 
-        <PrimaryButton onClick={finish}>
-          <span className="inline-flex items-center justify-center gap-1.5">
-            {finishLabel}
-            <ArrowRight size={16} />
-          </span>
-        </PrimaryButton>
+        <ProfileProceedButton
+          label={proceedLabel(true)}
+          onClick={finish}
+          disabled={!canProceedToSuggestions || finishing}
+        />
 
-        {showPipeline && (
-          <ProgressiveResults
-            pipelineStage={pipelineStage}
-            pipelineError={pipelineError}
-            topics={state.topics}
-            suggestedActivities={state.suggestedActivities}
-            similarPeople={similarPeople}
-            showActivities
-            compact
-          />
-        )}
+        {renderPipelineExtras(showPipeline)}
       </AppShell>
     );
   }
@@ -468,25 +596,17 @@ function SignUpDetails() {
       </div>
 
       <div className="mt-7">
-        <PrimaryButton onClick={onContinue}>
-          <span className="inline-flex items-center justify-center gap-1.5">
-            {idx === total - 1 ? finishLabel : "Continue"}
-            <ArrowRight size={16} />
-          </span>
-        </PrimaryButton>
+        <ProfileProceedButton
+          label={proceedLabel(idx === total - 1)}
+          onClick={onContinue}
+          disabled={
+            finishing ||
+            (idx === total - 1 && !canProceedToSuggestions)
+          }
+        />
       </div>
 
-      {showPipeline && (
-        <ProgressiveResults
-          pipelineStage={pipelineStage}
-          pipelineError={pipelineError}
-          topics={state.topics}
-          suggestedActivities={state.suggestedActivities}
-          similarPeople={similarPeople}
-          showActivities
-          compact
-        />
-      )}
+      {renderPipelineExtras(showPipeline)}
 
       {mode === "demo" && (
         <div className="mt-3">

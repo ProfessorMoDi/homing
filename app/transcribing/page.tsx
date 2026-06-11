@@ -6,11 +6,10 @@ import {
   Cloud,
   Cpu,
   Check,
-  ChevronLeft,
-  ChevronRight,
   Quote,
   AlertCircle,
 } from "lucide-react";
+import { HomiWaitingCarousel } from "@/components/HomiWaitingCarousel";
 import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton } from "@/components/Bits";
 import { Pigeon } from "@/components/Pigeon";
@@ -20,50 +19,6 @@ import { takeAudio } from "@/lib/audioStash";
 import { setCached, topicSignature } from "@/lib/suggestionsCache";
 
 type Stage = 0 | 1 | 2 | 3 | 4; // idle / transcribing / analyzing / ready / error
-
-interface Slide {
-  eyebrow: string;
-  title: string;
-  body: string;
-}
-
-const SLIDES: Slide[] = [
-  {
-    eyebrow: "Random fact",
-    title: "Homing pigeons can navigate 1,800 km home.",
-    body: "They use the Earth's magnetic field and a small bias toward roads. Homi just wanted to be the mascot.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "Pigeons recognise themselves in mirrors.",
-    body: "They also pass basic shape-sorting tests. The 'rats with wings' meme is rude and statistically wrong.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "A pigeon once saved a thousand soldiers.",
-    body: "G.I. Joe flew 32 km in 20 minutes carrying a message that cancelled a bombing in 1943. Homi has not received a medal yet.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "Darwin bred pigeons before writing his book.",
-    body: "The first chapter of On the Origin of Species is entirely about pigeon breeding. Homi finds this very validating.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "Pigeons can count up to nine.",
-    body: "Lab studies in 2011 showed they distinguish small quantities about as well as primates. Still bad at sharing chips.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "Pigeons mate for life.",
-    body: "They co-raise their chicks and recognise each other by voice. They also hold mild grudges. Same.",
-  },
-  {
-    eyebrow: "Random fact",
-    title: "Rotterdam has more bikes than people.",
-    body: "Roughly 600,000 bikes for 670,000 residents. A solid chunk are currently locked to something that has fallen over.",
-  },
-];
 
 interface StageChipProps {
   label: string;
@@ -160,8 +115,6 @@ function Transcribing() {
   } = useApp();
 
   const [stage, setStage] = useState<Stage>(0);
-  const [slideIdx, setSlideIdx] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const startedRef = useRef(false);
   const fakeTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -175,23 +128,6 @@ function Transcribing() {
   // Clear any pending fake-progression timers on unmount (every entry branch
   // schedules them, but only one set a cleanup before).
   useEffect(() => () => fakeTimersRef.current.forEach(clearTimeout), []);
-
-  // Carousel auto-advance, pauses if user interacts or when stage is terminal.
-  useEffect(() => {
-    if (paused) return;
-    if (stage === 4) return;
-    const t = setTimeout(() => {
-      setSlideIdx((i) => (i + 1) % SLIDES.length);
-    }, 4200);
-    return () => clearTimeout(t);
-  }, [slideIdx, paused, stage]);
-
-  // Resume auto-advance shortly after a manual interaction.
-  useEffect(() => {
-    if (!paused) return;
-    const t = setTimeout(() => setPaused(false), 7000);
-    return () => clearTimeout(t);
-  }, [paused, slideIdx]);
 
   // Auto-advance to /themes once the pipeline is ready. Short delay so the
   // user sees the "Themes ready" state land. Tapping Review themes skips it.
@@ -353,16 +289,6 @@ function Transcribing() {
     setStage(3);
   }
 
-  function nudgeSlide(delta: 1 | -1) {
-    setPaused(true);
-    setSlideIdx((i) => (i + delta + SLIDES.length) % SLIDES.length);
-  }
-
-  function jumpSlide(idx: number) {
-    setPaused(true);
-    setSlideIdx(idx);
-  }
-
   const stageLabel = (() => {
     if (stage === 0) return "Starting…";
     if (stage === 1) return isLive ? "Homi is transcribing…" : "Working on your phone…";
@@ -378,7 +304,6 @@ function Transcribing() {
     .slice(0, 22)
     .join(" ");
 
-  const slide = SLIDES[slideIdx];
   const isError = stage === 4;
   const isReady =
     stage === 3 ||
@@ -451,84 +376,7 @@ function Transcribing() {
         </Card>
       ) : (
         <>
-          {/* Intro carousel — auto-advancing, tap to navigate */}
-          <Card
-            className="mb-4 relative overflow-hidden cursor-pointer select-none"
-            onClick={() => nudgeSlide(1)}
-          >
-            <div className="absolute top-3 left-5 text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-muted)] font-medium">
-              While Homi works
-            </div>
-            <button
-              type="button"
-              aria-label="Previous slide"
-              onClick={(e) => {
-                e.stopPropagation();
-                nudgeSlide(-1);
-              }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 grid place-items-center h-8 w-8 rounded-full text-[var(--color-muted)] hover:bg-[var(--color-cream-warm)] hover:text-[var(--color-ink)] transition-colors z-10"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label="Next slide"
-              onClick={(e) => {
-                e.stopPropagation();
-                nudgeSlide(1);
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center h-8 w-8 rounded-full text-[var(--color-muted)] hover:bg-[var(--color-cream-warm)] hover:text-[var(--color-ink)] transition-colors z-10"
-            >
-              <ChevronRight size={16} />
-            </button>
-
-            <div className="px-10 pt-9 pb-2 min-h-[160px]">
-              <div
-                key={slideIdx}
-                className="animate-fade-in-soft"
-              >
-                <p className="text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-sage-deep)] font-medium mb-1.5">
-                  {slide.eyebrow}
-                </p>
-                <p className="display text-[19px] leading-snug mb-2">
-                  {slide.title}
-                </p>
-                <p className="text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
-                  {slide.body}
-                </p>
-              </div>
-            </div>
-
-            {/* Progress strip — fills while the current slide is showing */}
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--color-line)] overflow-hidden">
-              <div
-                key={`bar-${slideIdx}-${paused}`}
-                className={
-                  "h-full bg-[var(--color-sage)] origin-left " +
-                  (paused ? "" : "animate-slide-fill")
-                }
-              />
-            </div>
-          </Card>
-
-          {/* Carousel dot navigation */}
-          <div className="flex items-center justify-center gap-1.5 mb-5">
-            {SLIDES.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Go to slide ${i + 1}`}
-                aria-current={i === slideIdx}
-                onClick={() => jumpSlide(i)}
-                className={
-                  "h-1.5 rounded-full transition-all " +
-                  (i === slideIdx
-                    ? "w-6 bg-[var(--color-ink)]"
-                    : "w-1.5 bg-[var(--color-line)] hover:bg-[var(--color-muted)]")
-                }
-              />
-            ))}
-          </div>
+          <HomiWaitingCarousel pausedExternally={isError} />
 
           {state.companionReflection && stage >= 3 && (
             <Card className="mb-5 animate-pop-in">

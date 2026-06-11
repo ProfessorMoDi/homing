@@ -30,7 +30,7 @@ function buildStages(
         ? `Expanding via ${secondary} in the ontology`
         : "Checking one-hop related topics",
       "Sending invites in match order",
-      "Waiting for replies",
+      "Enough people said yes",
     ];
   }
   return [
@@ -41,7 +41,7 @@ function buildStages(
     secondary
       ? `Checking ${secondary} matches`
       : "Checking broader interest matches",
-    "Waiting for replies",
+    "Group is forming",
   ];
 }
 
@@ -80,9 +80,21 @@ export default function Finding() {
   );
 
   useEffect(() => {
+    if (acceptedIds.length > 0) {
+      setAccepted((n) => Math.max(n, acceptedIds.length));
+    }
+  }, [acceptedIds.length]);
+
+  useEffect(() => {
     if (matchLoading) {
       setStage(0);
-      setAccepted(0);
+      if (acceptedIds.length === 0) setAccepted(0);
+      return;
+    }
+
+    if (acceptedIds.length >= a.minimum_group_size) {
+      setAccepted(acceptedIds.length);
+      setStage(stages.length);
       return;
     }
 
@@ -111,13 +123,7 @@ export default function Finding() {
       timers.forEach(clearTimeout);
       acceptTimers.forEach(clearTimeout);
     };
-  }, [matchLoading, invited, stages.length]);
-
-  useEffect(() => {
-    if (acceptedIds.length > 0) {
-      setAccepted((n) => Math.max(n, acceptedIds.length));
-    }
-  }, [acceptedIds.length]);
+  }, [matchLoading, invited, stages.length, acceptedIds.length, a.minimum_group_size]);
 
   const target = a.group_size_target;
   const ready = accepted >= a.minimum_group_size;
@@ -286,10 +292,6 @@ export default function Finding() {
                     <p className="text-[11.5px] text-[var(--color-sage-deep)]">
                       Accepted
                     </p>
-                  ) : status === "pending" && isInvited ? (
-                    <p className="text-[11.5px] text-[var(--color-muted)]">
-                      Waiting…
-                    </p>
                   ) : null}
                 </li>
               );
@@ -306,7 +308,6 @@ export default function Finding() {
           <Pill>Specific activity match</Pill>
           <Pill>Broader interest match</Pill>
           <Pill>Availability</Pill>
-          <Pill>Language comfort</Pill>
           <Pill>Previous positive feedback</Pill>
           <Pill>Private avoid-pairing</Pill>
           <Pill>Light location weight</Pill>
@@ -325,7 +326,7 @@ export default function Finding() {
           "Continue to verification"
         ) : (
           <>
-            Waiting for replies <ThinkingDots size="small" />
+            Group is forming <ThinkingDots size="small" />
           </>
         )}
       </PrimaryButton>

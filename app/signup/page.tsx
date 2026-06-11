@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, AlertCircle } from "lucide-react";
+import { ArrowRight, AlertCircle, Mail } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Label, PrimaryButton } from "@/components/Bits";
+import { Label, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { exitDemoSession } from "@/lib/appMode";
@@ -23,36 +23,62 @@ function GoogleIcon() {
   );
 }
 
+function magicLinkErrorMessage(e: unknown, authReady: boolean): string {
+  const code = (e as { code?: string }).code || "";
+  if (code === "auth/unauthorized-continue-uri") {
+    return "This URL isn't authorized in Firebase yet. Use the production site, or add this domain under Firebase → Authentication → Settings → Authorized domains.";
+  }
+  if (code === "auth/operation-not-allowed") {
+    return "Email link sign-in isn't enabled. In Firebase Console → Authentication → Sign-in method, turn on Email/Password and Email link (passwordless).";
+  }
+  if (code === "auth/configuration-not-found") {
+    return "Firebase Authentication isn't enabled for this project yet. Open Firebase Console → Authentication → Get started.";
+  }
+  if (!authReady) {
+    return "Sign-in isn't configured on this deployment (missing NEXT_PUBLIC_FIREBASE_* env vars).";
+  }
+  return "We couldn't send your sign-in link. Check the email and try again.";
+}
+
 export default function SignUp() {
   const { state, setSignup, commitSignup } = useApp();
   const { ready, sendMagicLink, signInWithGoogle } = useAuth();
   const router = useRouter();
   const s = state.signup;
 
+  const [phase, setPhase] = useState<"form" | "sending" | "linkSent">("form");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [linkNote, setLinkNote] = useState<string | null>(null);
 
   const baseOk = !!s.first_name;
   const emailOk = EMAIL_RE.test(s.email);
 
-  function onStart() {
-    if (!baseOk || !emailOk) return;
+  async function onStart() {
+    if (!baseOk || !emailOk || phase === "sending") return;
+    if (!ready) {
+      setError(
+        "Sign-in links aren't available here — Firebase env vars are missing. Use production or configure NEXT_PUBLIC_FIREBASE_*.",
+      );
+      return;
+    }
     setError(null);
+    setPhase("sending");
     setBusy(true);
     exitDemoSession();
-    // Create the User node up front so the voice + interests written during
-    // onboarding actually attach to it (they key off the email-derived id).
     commitSignup();
-    // Fire the sign-in link in the background — it's only so they can log back
-    // in later, so onboarding never waits on it. Verification is optional.
-    if (ready) {
-      void sendMagicLink(s.email).catch(() => {
-        setLinkNote(
-          "We couldn't send your sign-in link — you can still continue. Try logging in later from the login page.",
-        );
-      });
+    try {
+      await sendMagicLink(s.email);
+      setPhase("linkSent");
+    } catch (e) {
+      console.error("signup link failed", e);
+      setError(magicLinkErrorMessage(e, ready));
+      setPhase("form");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function continueToVoice() {
     router.push("/voice");
   }
 
@@ -67,7 +93,6 @@ export default function SignUp() {
         email: user.email || s.email,
         first_name: s.first_name || user.displayName?.split(" ")[0] || "",
       });
-      // Create the User node now (reads the freshest state via setState).
       commitSignup();
       router.push("/voice");
     } catch (e) {
@@ -78,6 +103,32 @@ export default function SignUp() {
       }
       setBusy(false);
     }
+  }
+
+  if (phase === "linkSent") {
+    return (
+      <AppShell back="/signup" title="Link sent">
+        <div className="flex flex-col items-center text-center pt-8">
+          <span className="grid place-items-center h-14 w-14 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)] mb-4 animate-pop-check">
+            <Mail size={26} />
+          </span>
+          <h1 className="display text-[24px] mb-2">Sign-in link sent</h1>
+          <p className="text-[14px] text-[var(--color-ink-soft)] leading-relaxed max-w-[20rem]">
+            We emailed a one-tap link to{" "}
+            <span className="font-medium text-[var(--color-ink)]">{s.email}</span>.
+            Open it anytime to sign back in — you don&apos;t need to click it now.
+          </p>
+        </div>
+        <div className="mt-7">
+          <PrimaryButton onClick={continueToVoice}>
+            <span className="inline-flex items-center justify-center gap-1.5">
+              Continue to voice
+              <ArrowRight size={16} />
+            </span>
+          </PrimaryButton>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -128,23 +179,30 @@ export default function SignUp() {
             />
           </div>
         </div>
+        {!ready && (
+          <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]">
+            <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
+            <p className="text-[12.5px] text-[var(--color-ink-soft)]">
+              Sign-in links aren&apos;t available here — Firebase env vars are
+              missing (common on Vercel Preview). Use production or set{" "}
+              <code className="text-[11px]">NEXT_PUBLIC_FIREBASE_*</code> locally.
+            </p>
+          </div>
+        )}
         {error && (
           <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]">
             <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
             <p className="text-[12.5px] text-[var(--color-ink-soft)]">{error}</p>
           </div>
         )}
-        {linkNote && (
-          <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]/60">
-            <AlertCircle size={15} className="text-[var(--color-clay)] mt-0.5 shrink-0" />
-            <p className="text-[12.5px] text-[var(--color-ink-soft)]">{linkNote}</p>
-          </div>
-        )}
       </div>
 
-      <PrimaryButton onClick={onStart} disabled={!baseOk || !emailOk || busy}>
+      <PrimaryButton
+        onClick={onStart}
+        disabled={!baseOk || !emailOk || busy || !ready}
+      >
         <span className="inline-flex items-center justify-center gap-1.5">
-          Start
+          {phase === "sending" ? "Sending link…" : "Start"}
           <ArrowRight size={16} />
         </span>
       </PrimaryButton>

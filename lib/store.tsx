@@ -98,6 +98,8 @@ interface State {
   pipelineStage: PipelineStage;
   pipelineError: string | null;
   similarPeople: SimilarPerson[];
+  /** Bumped when a new voice session starts — resets profile questionnaire snapshot. */
+  profileSessionId: number;
   activity: Activity;
   inviteResponses: Record<string, "pending" | "accepted" | "declined" | "rescheduled">;
   verified: string[];
@@ -137,6 +139,7 @@ const initialState: State = {
   pipelineStage: "idle",
   pipelineError: null,
   similarPeople: [],
+  profileSessionId: 0,
   activity: defaultCatanActivity,
   inviteResponses: {},
   verified: [],
@@ -801,6 +804,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setState((s) => ({
       ...s,
+      profileSessionId: s.profileSessionId + 1,
+      signup: {
+        ...s.signup,
+        gender: "",
+        postcode: "",
+        availability: [],
+        commitment: "",
+      },
       pipelineStage: "transcribing",
       pipelineError: null,
       similarPeople: [],
@@ -1004,9 +1015,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     > = {};
     const accepting = ranked
       .filter((m) => !m.excluded && m.score > 0)
-      .slice(0, 4);
-    accepting.forEach((m, i) => {
-      responses[m.user.id] = i < 3 ? "accepted" : "pending";
+      .slice(0, Math.max(activity.group_size_target - 1, activity.minimum_group_size - 1, 3));
+    accepting.forEach((m) => {
+      responses[m.user.id] = "accepted";
     });
 
     setState((s) => ({ ...s, inviteResponses: responses }));
