@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Pencil, X, RotateCcw, Sparkles, Check, ChevronDown, ChevronUp, Quote } from "lucide-react";
+import { Pencil, X, RotateCcw, Sparkles, Check, ChevronDown, ChevronUp, Quote, Star } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, PrimaryButton, SecondaryButton, Pill } from "@/components/Bits";
 import { ThinkingDots } from "@/components/Loading";
@@ -220,7 +220,8 @@ export default function Themes() {
       <h1 className="display text-[26px] mb-1">Main themes Homi heard</h1>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-2">
         Everything you mentioned — edit, remove, or hide anything that doesn&apos;t
-        fit.
+        fit. Star the ones that really matter to you; they count extra when
+        Homi matches people.
       </p>
       {state.topics.length > 0 && (
         <p className="text-[12px] text-[var(--color-sage-deep)] mb-3">
@@ -309,7 +310,14 @@ export default function Themes() {
               <>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="display text-[18px] mb-1">{t.title}</p>
+                    <p className="display text-[18px] mb-1">
+                      {t.title}
+                      {t.core && (
+                        <span className="ml-2 align-middle inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-medium bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]">
+                          <Star size={9} fill="currentColor" /> core
+                        </span>
+                      )}
+                    </p>
                     <p className="text-[13.5px] text-[var(--color-ink-soft)] leading-relaxed">
                       {t.explanation}
                     </p>
@@ -319,13 +327,32 @@ export default function Themes() {
                       </p>
                     )}
                   </div>
-                  <button
-                    aria-label="Edit"
-                    className="btn-ghost shrink-0"
-                    onClick={() => setEditing(t.id)}
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      aria-label={t.core ? "Unstar" : "Star as core interest"}
+                      aria-pressed={!!t.core}
+                      className={
+                        "btn-ghost transition-colors " +
+                        (t.core
+                          ? "!text-[var(--color-sage-deep)]"
+                          : "text-[var(--color-muted)]")
+                      }
+                      onClick={() => updateTopic(t.id, { core: !t.core })}
+                    >
+                      <Star
+                        size={15}
+                        fill={t.core ? "currentColor" : "none"}
+                        className={t.core ? "animate-pop-check" : undefined}
+                      />
+                    </button>
+                    <button
+                      aria-label="Edit"
+                      className="btn-ghost"
+                      onClick={() => setEditing(t.id)}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   {t.tags.slice(0, 3).map((tag) => (

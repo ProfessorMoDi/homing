@@ -21,6 +21,8 @@ export interface SimilarPerson {
   sync?: number;
   /** Human-friendly shared-interest labels, rarest/strongest first. */
   shared?: string[];
+  /** Directly shared interests almost nobody else in the network has. */
+  rare?: string[];
 }
 
 export interface PipelineTopic {
@@ -28,6 +30,8 @@ export interface PipelineTopic {
   explanation: string;
   tags: string[];
   quote?: string;
+  broader?: string[];
+  related?: string[];
 }
 
 export interface PipelineSuggestedActivity {

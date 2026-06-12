@@ -150,6 +150,10 @@ export interface InterestTopic {
   hidden?: boolean;
   /** LLM keyword tags for the topic — used to auto-link long-tail topics. */
   tags?: string[];
+  /** LLM-declared broader categories — strongest auto-link signal (0.6). */
+  broader?: string[];
+  /** LLM-declared sibling interests — auto-linked at sibling weight (0.5). */
+  related?: string[];
 }
 
 export interface WriteInterestsPayload {
@@ -177,7 +181,13 @@ export async function writeInterests(
     weight: number;
     source: string;
   }> = [];
-  const linkRows: Array<{ fromId: string; toId: string; kind: string; weight: number }> = [];
+  const linkRows: Array<{
+    fromId: string;
+    toId: string;
+    toTitle: string;
+    kind: string;
+    weight: number;
+  }> = [];
   let skipped = 0;
 
   for (const t of payload.topics) {
@@ -195,10 +205,15 @@ export async function writeInterests(
       source: t.source ?? "voice-analysis",
     });
     if (!canonical) {
-      for (const link of inferTopicLinks(topicId, t.tags)) {
+      const links = inferTopicLinks(topicId, t.tags, {
+        broader: t.broader,
+        related: t.related,
+      });
+      for (const link of links) {
         linkRows.push({
           fromId: topicId,
           toId: link.toId,
+          toTitle: link.toTitle,
           kind: link.kind,
           weight: link.weight,
         });
@@ -227,6 +242,8 @@ export async function writeInterests(
       `UNWIND $links AS link
        MATCH (from:Topic {id: link.fromId})
        MERGE (to:Topic {id: link.toId})
+         ON CREATE SET to.title = link.toTitle, to.canonical = false
+         ON MATCH  SET to.title = coalesce(to.title, link.toTitle)
        MERGE (from)-[r:RELATED_TO {kind: link.kind}]->(to)
          SET r.weight = link.weight, r.inferred = true`,
       { links: linkRows },

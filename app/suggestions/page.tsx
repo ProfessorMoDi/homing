@@ -387,39 +387,50 @@ export default function Suggestions() {
             </div>
           ) : similarPeople.length > 0 ? (
             <div className="grid gap-3 stagger">
-              {similarPeople.map((p) => (
-                <Card key={p.user_id}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="display text-[17px]">{p.first_name}</p>
-                      <p className="text-[12.5px] text-[var(--color-muted)]">
-                        {p.neighbourhood}
+              {similarPeople.map((p) => {
+                const rareTopic = p.rare?.[0];
+                return (
+                  <Card key={p.user_id}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="display text-[17px]">{p.first_name}</p>
+                        <p className="text-[12.5px] text-[var(--color-muted)]">
+                          {p.neighbourhood}
+                        </p>
+                      </div>
+                      <span className="pill !text-[11px] !bg-[var(--color-sage-soft)] !text-[var(--color-sage-deep)] !border-transparent">
+                        {typeof p.sync === "number" && p.sync > 0
+                          ? `${p.sync}% in sync`
+                          : "shares interests"}
+                      </span>
+                    </div>
+                    {rareTopic && (
+                      <p className="text-[12px] text-[var(--color-sage-deep)] mt-2 inline-flex items-center gap-1.5">
+                        <Sparkles size={11} />
+                        Rare match — you two might be the only ones into{" "}
+                        {rareTopic} here.
                       </p>
-                    </div>
-                    <span className="pill !text-[11px] !bg-[var(--color-sage-soft)] !text-[var(--color-sage-deep)] !border-transparent">
-                      {typeof p.sync === "number" && p.sync > 0
-                        ? `${p.sync}% in sync`
-                        : "shares interests"}
-                    </span>
-                  </div>
-                  {(p.shared?.length ?? 0) > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 mt-2.5">
-                      {p.shared!.slice(0, 3).map((s) => (
-                        <Pill key={s}>{s}</Pill>
-                      ))}
-                    </div>
-                  ) : p.reasons.length > 0 ? (
-                    <p className="text-[12.5px] text-[var(--color-ink-soft)] mt-2 leading-relaxed">
-                      {p.reasons.slice(0, 2).join(" · ")}
-                    </p>
-                  ) : null}
-                </Card>
-              ))}
+                    )}
+                    {(p.shared?.length ?? 0) > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {p.shared!.slice(0, 3).map((s) => (
+                          <Pill key={s}>{s}</Pill>
+                        ))}
+                      </div>
+                    ) : p.reasons.length > 0 ? (
+                      <p className="text-[12.5px] text-[var(--color-ink-soft)] mt-2 leading-relaxed">
+                        {p.reasons.slice(0, 2).join(" · ")}
+                      </p>
+                    ) : null}
+                  </Card>
+                );
+              })}
             </div>
           ) : pipelineStage === "ready" ? (
             <Card className="text-[13px] text-[var(--color-muted)] py-5 text-center">
-              No one in the network shares these interests yet — you might be
-              first. Pick an activity to start inviting.
+              You&apos;re the first one here with these interests. They&apos;re
+              saved — Homi connects you the moment someone who fits joins the
+              flock.
             </Card>
           ) : null}
         </section>

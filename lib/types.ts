@@ -57,6 +57,12 @@ export interface Topic {
   tags: string[];
   quote?: string;
   hidden?: boolean;
+  /** User-starred "this is really me" — syncs as LIKES.weight 1.5. */
+  core?: boolean;
+  /** LLM-emitted broader categories ("cooking" for "korean cooking"). */
+  broader?: string[];
+  /** LLM-emitted sibling interests ("bachata" for "salsa"). */
+  related?: string[];
 }
 
 export interface ImplicitPreference {

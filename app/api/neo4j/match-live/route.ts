@@ -115,6 +115,14 @@ export async function POST(req: NextRequest) {
       const interest = toNumber(r.get("interest_score"));
       const base = toNumber(r.get("base_score"));
       const userId = r.get("user_id") as string;
+      // Direct shared interests almost nobody else in the network has —
+      // rarity ≥ 1.45 means at most ~2 likers. These are the "you two might
+      // be the only ones" moments the product is about, so surface them.
+      const rare = dedupe(
+        paths
+          .filter((p) => p.weight >= 0.999 && p.rarity >= 1.45)
+          .map((p) => p.via_title),
+      );
       return {
         user_id: userId,
         first_name: memberLabel(r.get("first_name") as string | null, userId),
@@ -124,6 +132,7 @@ export async function POST(req: NextRequest) {
         shared_count: toNumber(r.get("shared_count")),
         // Human-friendly shared-interest labels, e.g. "Catan", "Board games".
         shared: dedupe(paths.map((p) => p.via_title)),
+        rare,
         reasons: dedupe(paths.map(formatReason)),
       };
     });

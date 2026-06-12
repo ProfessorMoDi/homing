@@ -281,14 +281,25 @@ export function canonicalizeTopic(raw: string): CanonicalTopic {
 
 export interface InferredTopicLink {
   toId: string;
-  kind: "inferred-tag" | "inferred-token";
+  /** Display title for the target — needed when the node is auto-created. */
+  toTitle: string;
+  kind: "inferred-broader" | "inferred-sibling" | "inferred-tag" | "inferred-token";
   weight: number;
 }
 
 const INFERRED_WEIGHT: Record<InferredTopicLink["kind"], number> = {
-  "inferred-token": 0.6, // behaves like a broader/parent edge
-  "inferred-tag": 0.45,  // between sibling (0.5) and adjacent (0.3)
+  "inferred-broader": 0.6, // LLM-declared parent — matches curated broader
+  "inferred-token": 0.6,   // token containment, behaves like broader/parent
+  "inferred-sibling": 0.5, // LLM-declared sibling — matches curated sibling
+  "inferred-tag": 0.45,    // generic keyword tag, between sibling and adjacent
 };
+
+export interface TopicLinkHints {
+  /** LLM-declared broader categories for the topic. */
+  broader?: string[];
+  /** LLM-declared sibling interests. */
+  related?: string[];
+}
 
 // Token sets for every canonical id, precomputed once.
 const CANONICAL_TOKENS: Array<{ id: string; tokens: string[] }> =
@@ -297,37 +308,51 @@ const CANONICAL_TOKENS: Array<{ id: string; tokens: string[] }> =
 export function inferTopicLinks(
   topicId: string,
   tags: string[] = [],
+  hints: TopicLinkHints = {},
 ): InferredTopicLink[] {
   if (!topicId || CANONICAL_TOPICS[topicId]) return [];
 
   const links = new Map<string, InferredTopicLink>();
+  const add = (rawOrId: string, kind: InferredTopicLink["kind"], requireCanonical: boolean) => {
+    const c = canonicalizeTopic(rawOrId);
+    // Hint targets may themselves be long-tail topics ("bachata") — link to
+    // them anyway so two niche siblings connect; tags stay canonical-only
+    // to avoid creating noise nodes from generic keywords.
+    if (!c.id || c.id === topicId || (requireCanonical && !c.canonical)) return;
+    if (!links.has(c.id)) {
+      links.set(c.id, {
+        toId: c.id,
+        toTitle: c.title,
+        kind,
+        weight: INFERRED_WEIGHT[kind],
+      });
+    }
+  };
 
-  // 1. Token containment (checked first — it's the stronger signal): a
-  // canonical id whose every token appears in the new topic's slug is a
-  // broader concept ("korean-cooking" → "cooking").
+  // Strongest signals first — Map dedup keeps the first kind per target.
+  // 1. LLM-declared broader categories ("korean cooking" → "cooking").
+  for (const b of hints.broader ?? []) add(b, "inferred-broader", false);
+
+  // 2. Token containment: a canonical id whose every token appears in the
+  // new topic's slug is a broader concept ("korean-cooking" → "cooking").
   const topicTokens = new Set(topicId.split("-"));
   for (const { id, tokens } of CANONICAL_TOKENS) {
-    if (id === topicId) continue;
+    if (id === topicId || links.has(id)) continue;
     if (tokens.every((t) => topicTokens.has(t))) {
       links.set(id, {
         toId: id,
+        toTitle: CANONICAL_TOPICS[id].title,
         kind: "inferred-token",
         weight: INFERRED_WEIGHT["inferred-token"],
       });
     }
   }
 
-  // 2. Tag-derived links: canonicalize each LLM tag; keep canonical hits.
-  for (const tag of tags) {
-    const c = canonicalizeTopic(tag);
-    if (c.canonical && c.id !== topicId && !links.has(c.id)) {
-      links.set(c.id, {
-        toId: c.id,
-        kind: "inferred-tag",
-        weight: INFERRED_WEIGHT["inferred-tag"],
-      });
-    }
-  }
+  // 3. LLM-declared siblings ("salsa" → "bachata").
+  for (const s of hints.related ?? []) add(s, "inferred-sibling", false);
+
+  // 4. Generic keyword tags; canonical hits only.
+  for (const tag of tags) add(tag, "inferred-tag", true);
 
   return Array.from(links.values());
 }

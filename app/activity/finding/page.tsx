@@ -247,10 +247,11 @@ export default function Finding() {
 
       {!matchLoading && topMatches.length === 0 && (
         <Card className="mb-5">
-          <p className="text-[14px] font-medium mb-1">No matches yet</p>
+          <p className="text-[14px] font-medium mb-1">You&apos;re the first</p>
           <p className="text-[13px] text-[var(--color-ink-soft)] leading-relaxed">
-            Nobody in the network shares these interests yet. As more people
-            sign up, the ones who fit will show up here.
+            Nobody in the network shares these interests yet — your activity
+            is saved, and Homi invites the right people the moment they join
+            the flock.
           </p>
         </Card>
       )}

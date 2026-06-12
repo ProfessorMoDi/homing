@@ -24,6 +24,7 @@ export interface OntologyStats {
   topics: number;
   edges: number;
   inferred_links?: number;
+  co_liked_edges?: number;
 }
 
 export async function seedOntology(
@@ -85,11 +86,23 @@ export async function backfillInferredLinks(
     `MATCH (t:Topic) WHERE coalesce(t.canonical, false) = false
      RETURN t.id AS id`,
   );
-  const links: Array<{ fromId: string; toId: string; kind: string; weight: number }> = [];
+  const links: Array<{
+    fromId: string;
+    toId: string;
+    toTitle: string;
+    kind: string;
+    weight: number;
+  }> = [];
   for (const rec of res.records) {
     const id = rec.get("id") as string;
     for (const l of inferTopicLinks(id, [])) {
-      links.push({ fromId: id, toId: l.toId, kind: l.kind, weight: l.weight });
+      links.push({
+        fromId: id,
+        toId: l.toId,
+        toTitle: l.toTitle,
+        kind: l.kind,
+        weight: l.weight,
+      });
     }
   }
   if (links.length > 0) {
@@ -97,12 +110,40 @@ export async function backfillInferredLinks(
       `UNWIND $links AS link
        MATCH (from:Topic {id: link.fromId})
        MERGE (to:Topic {id: link.toId})
+         ON CREATE SET to.title = link.toTitle, to.canonical = false
+         ON MATCH  SET to.title = coalesce(to.title, link.toTitle)
        MERGE (from)-[r:RELATED_TO {kind: link.kind}]->(to)
          SET r.weight = link.weight, r.inferred = true`,
       { links },
     );
   }
   return links.length;
+}
+
+// Co-liked edge learning: when two topics are liked by the same people, that
+// co-occurrence IS the sub-ontology — collaborative filtering expressed in
+// the graph idiom, fully explainable ("people into Wingspan are usually into
+// Catan"). Rebuilt from scratch on every run so weights track the live
+// network and stale pairs disappear; pairs that already have a curated or
+// inferred edge are skipped so learned edges never override deliberate ones.
+export async function refreshCoLikedEdges(
+  tx: ManagedTransaction,
+): Promise<number> {
+  await tx.run(`MATCH ()-[r:RELATED_TO {kind: 'co-liked'}]->() DELETE r`);
+  const res = await tx.run(
+    `MATCH (a:Topic)<-[l1:LIKES]-(u:User)-[l2:LIKES]->(b:Topic)
+     WHERE a.id < b.id
+       AND coalesce(l1.weight, 1) > 0
+       AND coalesce(l2.weight, 1) > 0
+     WITH a, b, count(DISTINCT u) AS co
+     WHERE co >= 2 AND NOT (a)-[:RELATED_TO]-(b)
+     MERGE (a)-[r:RELATED_TO {kind: 'co-liked'}]->(b)
+       SET r.weight = CASE WHEN co >= 5 THEN 0.5 ELSE 0.35 END,
+           r.inferred = true,
+           r.co_likes = co
+     RETURN count(r) AS n`,
+  );
+  return Number(res.records[0]?.get("n") ?? 0);
 }
 
 // Standalone helper for repair / manual invocation outside seed flow.
@@ -113,6 +154,7 @@ export async function reseedOntology(): Promise<OntologyStats> {
   return withWrite(async (tx) => {
     const stats = await seedOntology(tx);
     const inferred = await backfillInferredLinks(tx);
-    return { ...stats, inferred_links: inferred };
+    const coLiked = await refreshCoLikedEdges(tx);
+    return { ...stats, inferred_links: inferred, co_liked_edges: coLiked };
   });
 }

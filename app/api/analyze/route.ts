@@ -17,6 +17,8 @@ Return a strict JSON object with exactly these fields.
    - explanation: one short sentence paraphrasing what they said
    - tags: 2–5 lowercase keyword tags
    - quote: a short verbatim phrase from the transcript that proves they said it
+   - broader: 1–2 lowercase broader categories this interest belongs to (e.g. "korean cooking" → ["cooking", "food"]). General knowledge is fine here — this does NOT need transcript evidence.
+   - related: up to 2 lowercase sibling interests someone into this is typically also into (e.g. "salsa" → ["bachata"]). General knowledge is fine here too.
 
    CRITICAL: One topic = one atomic concept. Never bundle separable interests.
    "Cooking" and "Asian food" are TWO topics. "Salsa" and "bachata" are TWO topics.
@@ -88,6 +90,8 @@ interface TopicRow {
   explanation: string;
   tags: string[];
   quote?: string;
+  broader: string[];
+  related: string[];
 }
 
 interface LanguageRow {
@@ -206,6 +210,8 @@ function coerceUnderstand(raw: unknown): UnderstandResult {
           tags: lowerList(t.tags, 5),
           quote:
             typeof t.quote === "string" ? t.quote.slice(0, 200) : undefined,
+          broader: lowerList(t.broader, 2),
+          related: lowerList(t.related, 2),
         }))
         .slice(0, MAX_TOPICS)
     : [];

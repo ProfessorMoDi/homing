@@ -164,7 +164,14 @@ interface SuggestedActivity {
 }
 
 interface LiveProfile {
-  topics: { title: string; explanation: string; tags: string[]; quote?: string }[];
+  topics: {
+    title: string;
+    explanation: string;
+    tags: string[];
+    quote?: string;
+    broader?: string[];
+    related?: string[];
+  }[];
   minor_interests: string[];
   languages: string[];
   language_confidence?: LanguageConfidence;
@@ -348,6 +355,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           reasons: p.reasons,
           sync: p.sync,
           shared: p.shared,
+          rare: p.rare,
         })),
       }));
     }
@@ -600,7 +608,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (visible.length === 0 && state.minorInterests.length === 0) return;
     const ctx = currentUserContext(state.signup);
     const sig = JSON.stringify({
-      topics: visible.map((t) => ({ id: t.id, title: t.title, hidden: t.hidden })),
+      topics: visible.map((t) => ({
+        id: t.id,
+        title: t.title,
+        hidden: t.hidden,
+        core: t.core,
+      })),
       minor: state.minorInterests,
     });
     if (interestsSyncedRef.current === sig) return;
@@ -612,10 +625,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         topics: [
           ...state.topics.map((t) => ({
             title: t.title,
-            weight: t.hidden ? 0 : 1,
+            weight: t.hidden ? 0 : t.core ? 1.5 : 1,
             source: "voice-analysis" as const,
             hidden: !!t.hidden,
             tags: t.tags,
+            broader: t.broader,
+            related: t.related,
           })),
           ...state.minorInterests.map((title) => ({
             title,
@@ -871,6 +886,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 explanation: t.explanation,
                 tags: t.tags,
                 quote: t.quote,
+                broader: t.broader,
+                related: t.related,
               })),
               minorInterests: profile.minor_interests,
               activityTypes: profile.activity_types,

@@ -103,10 +103,12 @@ export function buildInterestsSync(snap: GraphMirrorSnapshot) {
     topics: [
       ...snap.topics.map((t) => ({
         title: t.title,
-        weight: t.hidden ? 0 : 1,
+        weight: t.hidden ? 0 : t.core ? 1.5 : 1,
         source: "voice-analysis" as const,
         hidden: !!t.hidden,
         tags: t.tags,
+        broader: t.broader,
+        related: t.related,
       })),
       ...snap.minorInterests.map((title) => ({
         title,
