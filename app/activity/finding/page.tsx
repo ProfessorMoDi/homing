@@ -28,7 +28,7 @@ function buildStages(
         : "Ranking people with overlapping interests",
       secondary
         ? `Expanding via ${secondary} in the ontology`
-        : "Checking one-hop related topics",
+        : "Walking related interests in the graph",
       "Sending invites in match order",
       "Enough people said yes",
     ];
@@ -306,11 +306,11 @@ export default function Finding() {
         </p>
         <div className="flex flex-wrap gap-1.5">
           <Pill>Specific activity match</Pill>
-          <Pill>Broader interest match</Pill>
+          <Pill>Related interests</Pill>
+          <Pill>Rare interests count extra</Pill>
           <Pill>Availability</Pill>
           <Pill>Previous positive feedback</Pill>
           <Pill>Private avoid-pairing</Pill>
-          <Pill>Light location weight</Pill>
         </div>
       </Card>
 

@@ -457,37 +457,49 @@ Seeded into Neo4j via `lib/neo4j-ontology.ts` (`POST /api/neo4j/ontology` or dur
 
 **File:** `app/api/neo4j/match/route.ts`
 
-The match query implements a two-layer matching strategy documented in code comments:
+The match query implements a three-layer matching strategy documented in code comments:
 
 #### Layer 1: Direct Overlap
 
 User `:LIKES` a Topic that the Activity `:REQUIRES`. Weight = 1.0, full points (50 specific / 30 broader).
 
-#### Layer 2: One-Hop Ontology Expansion
+#### Layer 2: Two-Hop Ontology Expansion
 
-User `:LIKES` a Topic that is `:RELATED_TO` a required Topic. Weight = edge weight (0.6 broader / 0.5 sibling / 0.3 adjacent).
+User `:LIKES` a Topic within **two** `:RELATED_TO` hops of a required Topic. Path weight = product of edge weights (0.6 broader / 0.5 sibling / 0.3 adjacent / 0.45–0.6 inferred), floored at 0.15. This is what connects two people with *different* very specific interests under a shared parent — e.g. a "catan" requirement reaches a "ticket-to-ride" liker at 0.6 × 0.6 = 0.36.
+
+Long-tail (non-canonical) topics participate because `writeInterests` auto-links them into the ontology: the LLM's keyword tags and token containment against canonical ids become `RELATED_TO {inferred: true}` edges, so the ontology grows itself from real speech while staying symbolic and explainable.
+
+#### Layer 3: Rarity (IDF-Style) Weighting
+
+Each requirement's points are multiplied by `1 + 1 / (1 + ln(1 + likers))` where `likers` is how many users `:LIKES` the required topic. A shared niche interest (~1.6×) outranks a ubiquitous one (~1.2×), so very specific overlaps dominate the ranking.
 
 #### Algorithm Steps
 
 **Step 1 — Candidate discovery**
 
 ```cypher
+OPTIONAL MATCH (creator:User {id: $creatorId})
 MATCH (a:Activity {id: $activityId})-[req:REQUIRES]->(t:Topic)
-MATCH (t)-[rel:RELATED_TO*0..1]-(t2:Topic)<-[:LIKES]-(u:User)
+MATCH (t)-[rel:RELATED_TO*0..2]-(t2:Topic)<-[l:LIKES]-(u:User)
 WHERE u.id <> $creatorId
+  AND coalesce(l.weight, 1) > 0
   AND NOT (u)-[:AVOID]->(:User {id: $creatorId})
   AND NOT (:User {id: $creatorId})-[:AVOID]->(u)
+  AND (creator IS NULL
+       OR ((coalesce(u.gender_preference, '') <> 'same-gender' OR u.gender = creator.gender)
+       AND (coalesce(creator.gender_preference, '') <> 'same-gender' OR creator.gender = u.gender)))
   AND NOT EXISTS {
     MATCH (a)-[:REQUIRES {tier:'specific'}]->(:Topic)<-[:DISLIKES]-(u)
   }
 ```
 
-Traverse 0 or 1 hop along undirected `RELATED_TO` from each required topic to find users who like related topics.
+Traverse 0–2 hops along undirected `RELATED_TO` from each required topic to find users who like related topics. "Same-gender" group preference is honoured mutually as a hard filter.
 
 **Step 2 — Path weighting**
 
 - Direct like (0 hops): weight = **1.0**
-- 1-hop ontology edge: weight = edge's `RELATED_TO.weight` (fallback 0.4)
+- 1–2 hop path: weight = product of `RELATED_TO.weight` along the path (fallback 0.4/edge), cut below **0.15**
+- Multiplied by the user's own `LIKES.weight` (minor interests carry 0.5, hidden 0)
 
 **Step 3 — Per-requirement max**
 
@@ -497,8 +509,10 @@ For each `(user, required_topic)` pair, keep the **strongest path only**. A user
 
 Sum across all requirements:
 
-- `specific tier`: `best_weight × 50`
-- `broader tier`: `best_weight × 30`
+- `specific tier`: `best_weight × 50 × rarity`
+- `broader tier`: `best_weight × 30 × rarity`
+
+Reasons are returned strongest/rarest-first so the lead explanation is the most specific shared interest.
 
 **Step 5 — Side-axis bonuses**
 

@@ -260,6 +260,78 @@ export function canonicalizeTopic(raw: string): CanonicalTopic {
   return { id: slug, title: raw.trim(), canonical: false };
 }
 
+// ── Ontology auto-linking ────────────────────────────────────────────────────
+// The hand-curated catalogue covers ~40 topics; real users speak in thousands.
+// Without linking, every long-tail topic ("street photography", "korean
+// cooking", "analog synths") lands as an orphan Topic node that only matches
+// users who said the exact same phrase. inferTopicLinks() derives RELATED_TO
+// edges for non-canonical topics from two free signals:
+//
+//   1. The LLM's own keyword tags for the topic (analyze emits 2–5 per topic).
+//      A tag that canonicalizes to a known topic is a broader/adjacent concept
+//      the model already identified — no extra LLM call needed.
+//   2. Token containment: if a canonical id's tokens are a subset of the new
+//      topic's slug ("street-photography" ⊃ "photography"), the canonical
+//      topic is almost always the broader concept.
+//
+// The result: the ontology grows itself from real speech while staying a
+// symbolic, explainable graph — every inferred edge is traceable to a tag or
+// a token overlap, and the 2-hop matcher can connect two users whose specific
+// interests share an inferred parent.
+
+export interface InferredTopicLink {
+  toId: string;
+  kind: "inferred-tag" | "inferred-token";
+  weight: number;
+}
+
+const INFERRED_WEIGHT: Record<InferredTopicLink["kind"], number> = {
+  "inferred-token": 0.6, // behaves like a broader/parent edge
+  "inferred-tag": 0.45,  // between sibling (0.5) and adjacent (0.3)
+};
+
+// Token sets for every canonical id, precomputed once.
+const CANONICAL_TOKENS: Array<{ id: string; tokens: string[] }> =
+  Object.keys(CANONICAL_TOPICS).map((id) => ({ id, tokens: id.split("-") }));
+
+export function inferTopicLinks(
+  topicId: string,
+  tags: string[] = [],
+): InferredTopicLink[] {
+  if (!topicId || CANONICAL_TOPICS[topicId]) return [];
+
+  const links = new Map<string, InferredTopicLink>();
+
+  // 1. Token containment (checked first — it's the stronger signal): a
+  // canonical id whose every token appears in the new topic's slug is a
+  // broader concept ("korean-cooking" → "cooking").
+  const topicTokens = new Set(topicId.split("-"));
+  for (const { id, tokens } of CANONICAL_TOKENS) {
+    if (id === topicId) continue;
+    if (tokens.every((t) => topicTokens.has(t))) {
+      links.set(id, {
+        toId: id,
+        kind: "inferred-token",
+        weight: INFERRED_WEIGHT["inferred-token"],
+      });
+    }
+  }
+
+  // 2. Tag-derived links: canonicalize each LLM tag; keep canonical hits.
+  for (const tag of tags) {
+    const c = canonicalizeTopic(tag);
+    if (c.canonical && c.id !== topicId && !links.has(c.id)) {
+      links.set(c.id, {
+        toId: c.id,
+        kind: "inferred-tag",
+        weight: INFERRED_WEIGHT["inferred-tag"],
+      });
+    }
+  }
+
+  return Array.from(links.values());
+}
+
 // ── Neighbourhoods ────────────────────────────────────────────────────────────
 
 export interface NeighbourhoodDef {

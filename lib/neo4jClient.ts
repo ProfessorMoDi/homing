@@ -80,6 +80,7 @@ export interface InterestsSync {
     weight?: number;
     source?: "voice-analysis" | "signup" | "edited" | "seed";
     hidden?: boolean;
+    tags?: string[];
   }>;
 }
 
@@ -225,6 +226,10 @@ export interface GraphMatchCandidate {
     tier: "specific" | "broader";
   }>;
   reasons: string[];
+  /** match-live only: 0–99 "interest sync" percentage. */
+  sync?: number;
+  /** match-live only: human-friendly shared-interest labels. */
+  shared?: string[];
 }
 
 export async function persistActivity(activity: Activity): Promise<boolean> {
@@ -282,6 +287,8 @@ export async function fetchLiveMatch(
         neighbourhood: string;
         score: number;
         reasons?: string[];
+        sync?: number;
+        shared?: string[];
       }>;
     };
     const list = Array.isArray(data.candidates) ? data.candidates : [];
@@ -291,6 +298,8 @@ export async function fetchLiveMatch(
       neighbourhood: c.neighbourhood,
       score: c.score,
       reasons: c.reasons ?? [],
+      sync: typeof c.sync === "number" ? c.sync : undefined,
+      shared: Array.isArray(c.shared) ? c.shared : undefined,
     }));
   } catch {
     return null;

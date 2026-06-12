@@ -396,15 +396,23 @@ export default function Suggestions() {
                         {p.neighbourhood}
                       </p>
                     </div>
-                    <span className="pill !text-[11px]">
-                      {p.score} pts overlap
+                    <span className="pill !text-[11px] !bg-[var(--color-sage-soft)] !text-[var(--color-sage-deep)] !border-transparent">
+                      {typeof p.sync === "number" && p.sync > 0
+                        ? `${p.sync}% in sync`
+                        : "shares interests"}
                     </span>
                   </div>
-                  {p.reasons.length > 0 && (
+                  {(p.shared?.length ?? 0) > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
+                      {p.shared!.slice(0, 3).map((s) => (
+                        <Pill key={s}>{s}</Pill>
+                      ))}
+                    </div>
+                  ) : p.reasons.length > 0 ? (
                     <p className="text-[12.5px] text-[var(--color-ink-soft)] mt-2 leading-relaxed">
                       {p.reasons.slice(0, 2).join(" · ")}
                     </p>
-                  )}
+                  ) : null}
                 </Card>
               ))}
             </div>

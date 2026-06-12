@@ -4,15 +4,28 @@ import { withRead } from "../../../../lib/neo4j";
 export const runtime = "nodejs";
 export const maxDuration = 15;
 
-// Two-layer matching:
+// Three-layer matching:
 //
 //   1. Direct overlap — user :LIKES a Topic that the Activity :REQUIRES.
 //      Weight = 1.0, full points (50 specific / 30 broader).
 //
-//   2. One-hop ontology expansion — user :LIKES a Topic that is :RELATED_TO
-//      a required Topic. Weight = edge weight (0.6 broader / 0.5 sibling /
-//      0.3 adjacent), so e.g. liking "strategy-games" for a "catan"-required
-//      activity scores 50 * 0.5 = 25 instead of 0.
+//   2. Up-to-two-hop ontology expansion — user :LIKES a Topic within two
+//      :RELATED_TO hops of a required Topic. Path weight = product of edge
+//      weights, so "catan" reaches "strategy-games" at 0.5 (one sibling hop)
+//      and "ticket-to-ride" at 0.6 * 0.6 = 0.36 (specific → board-games →
+//      specific). Paths below 0.15 are cut as noise. This is what connects
+//      two people with *different* very specific interests under a shared
+//      parent — previously they only matched if one liked the parent itself.
+//
+//   3. Rarity (IDF-style) weighting — a required topic that few people in
+//      the network like multiplies its points by up to ~1.6x, so a shared
+//      niche interest ("ableton") outranks a ubiquitous one ("coffee").
+//      rarity = 1 + 1 / (1 + ln(1 + likers)).
+//
+// The user's own LIKES.weight scales the path too (minor interests carry
+// weight 0.5, hidden 0 — previously only the 0-filter was applied), and the
+// creator's / candidate's "same-gender" group preference is respected as a
+// mutual hard filter.
 //
 // Per (user, requirement) we take the strongest path so a user who likes
 // both the exact topic and a neighbour doesn't get scored twice for it. The
@@ -24,12 +37,18 @@ export const maxDuration = 15;
 // with embeddings: every match has a traceable reason.
 
 const MATCH_QUERY = `
+// Creator node may not exist yet (e.g. read-only demo session) — the gender
+// clauses below tolerate NULL so matching still works without it.
+OPTIONAL MATCH (creator:User {id: $creatorId})
 MATCH (a:Activity {id: $activityId})-[req:REQUIRES]->(t:Topic)
-MATCH (t)-[rel:RELATED_TO*0..1]-(t2:Topic)<-[l:LIKES]-(u:User)
+MATCH (t)-[rel:RELATED_TO*0..2]-(t2:Topic)<-[l:LIKES]-(u:User)
 WHERE u.id <> $creatorId
   AND coalesce(l.weight, 1) > 0
   AND NOT (u)-[:AVOID]->(:User {id: $creatorId})
   AND NOT (:User {id: $creatorId})-[:AVOID]->(u)
+  AND (creator IS NULL
+       OR ((coalesce(u.gender_preference, '') <> 'same-gender' OR u.gender = creator.gender)
+       AND (coalesce(creator.gender_preference, '') <> 'same-gender' OR creator.gender = u.gender)))
   AND NOT EXISTS {
     MATCH (a)-[:REQUIRES {tier:'specific'}]->(:Topic)<-[:DISLIKES]-(u)
   }
@@ -38,30 +57,32 @@ WITH a, u,
      req.tier  AS tier,
      t.id      AS req_id,
      t.title   AS req_title,
+     COUNT { (t)<-[:LIKES]-(:User) } AS req_likers,
      t2.id     AS via_id,
      t2.title  AS via_title,
-     CASE WHEN size(rel) = 0 THEN 1.0
-          ELSE coalesce(rel[0].weight, 0.4)
-     END       AS w
+     reduce(w = 1.0, r IN rel | w * coalesce(r.weight, 0.4))
+       * coalesce(l.weight, 1.0) AS w
+WHERE w >= 0.15
 
 // Per (user, required topic), keep the strongest path.
-WITH a, u, tier, req_id, req_title,
+WITH a, u, tier, req_id, req_title, req_likers,
      max(w) AS best_w,
      collect({via_id: via_id, via_title: via_title, w: w}) AS opts
 WITH a, u, tier, req_id, req_title, best_w,
+     1.0 + 1.0 / (1.0 + log(1 + req_likers)) AS rarity,
      head([o IN opts WHERE o.w = best_w]) AS best_via
 
 // Aggregate per (activity, user) — sum weighted points + collect paths.
 WITH a, u,
-     sum(CASE WHEN tier = 'specific' THEN best_w * 50.0
-              ELSE                        best_w * 30.0
-         END) AS interest_score,
+     sum((CASE WHEN tier = 'specific' THEN 50.0 ELSE 30.0 END)
+         * best_w * rarity) AS interest_score,
      collect({
        req_id:    req_id,
        req_title: req_title,
        via_id:    best_via.via_id,
        via_title: best_via.via_title,
        weight:    best_w,
+       rarity:    rarity,
        tier:      tier
      }) AS paths
 
@@ -71,7 +92,7 @@ RETURN u.id                  AS user_id,
        toInteger(interest_score) AS interest_score,
        toInteger(interest_score) AS score,
        paths
-ORDER BY score DESC
+ORDER BY score DESC, size(paths) DESC
 LIMIT 20
 `;
 
@@ -81,6 +102,7 @@ interface PathRecord {
   via_id: string;
   via_title: string;
   weight: number;
+  rarity: number;
   tier: "specific" | "broader";
 }
 
@@ -114,9 +136,12 @@ export async function POST(req: NextRequest) {
     );
 
     const candidates: Candidate[] = result.records.map((r) => {
+      // Strongest + rarest paths first so the lead reason is the most
+      // specific shared interest, not a generic one-hop neighbour.
       const paths = ((r.get("paths") as unknown[]) ?? [])
         .map((p) => normalizePath(p))
-        .filter((p): p is PathRecord => p !== null);
+        .filter((p): p is PathRecord => p !== null)
+        .sort((a, b) => b.weight - a.weight || b.rarity - a.rarity);
       return {
         user_id: r.get("user_id") as string,
         first_name: r.get("first_name") as string,
@@ -154,6 +179,7 @@ function normalizePath(raw: unknown): PathRecord | null {
     via_id: o.via_id,
     via_title: (o.via_title as string) ?? o.via_id,
     weight: toNumber(o.weight),
+    rarity: toNumber(o.rarity) || 1,
     tier: o.tier === "broader" ? "broader" : "specific",
   };
 }

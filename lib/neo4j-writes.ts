@@ -5,7 +5,11 @@
 // `withWrite` transaction.
 
 import type { ManagedTransaction } from "neo4j-driver";
-import { canonicalizeNeighbourhood, canonicalizeTopic } from "./taxonomy";
+import {
+  canonicalizeNeighbourhood,
+  canonicalizeTopic,
+  inferTopicLinks,
+} from "./taxonomy";
 
 // ── User patch ───────────────────────────────────────────────────────────
 // Patch-style upsert. Only writes the fields actually present in the patch
@@ -79,12 +83,13 @@ export async function patchUser(
       `MATCH (u:User {id: $id})-[r:AVAILABLE_AT]->(:TimeSlot) DELETE r`,
       { id: patch.id },
     );
-    for (const slot of patch.availability) {
+    if (patch.availability.length > 0) {
       await tx.run(
         `MATCH (u:User {id: $uid})
-         MERGE (ts:TimeSlot {id: $tsId})
+         UNWIND $slots AS slot
+         MERGE (ts:TimeSlot {id: slot})
          MERGE (u)-[:AVAILABLE_AT]->(ts)`,
-        { uid: patch.id, tsId: slot },
+        { uid: patch.id, slots: patch.availability },
       );
     }
   }
@@ -94,20 +99,24 @@ export async function patchUser(
       `MATCH (u:User {id: $id})-[r:SPEAKS|COMFORTABLE_IN]->(:Language) DELETE r`,
       { id: patch.id },
     );
-    for (const lang of patch.languages_spoken ?? []) {
+    const spoken = (patch.languages_spoken ?? []).map((l) => l.toLowerCase());
+    const comfortable = (patch.languages_comfortable ?? []).map((l) => l.toLowerCase());
+    if (spoken.length > 0) {
       await tx.run(
         `MATCH (u:User {id: $uid})
-         MERGE (l:Language {id: $lid})
+         UNWIND $langs AS lang
+         MERGE (l:Language {id: lang})
          MERGE (u)-[:SPEAKS]->(l)`,
-        { uid: patch.id, lid: lang.toLowerCase() },
+        { uid: patch.id, langs: spoken },
       );
     }
-    for (const lang of patch.languages_comfortable ?? []) {
+    if (comfortable.length > 0) {
       await tx.run(
         `MATCH (u:User {id: $uid})
-         MERGE (l:Language {id: $lid})
+         UNWIND $langs AS lang
+         MERGE (l:Language {id: lang})
          MERGE (u)-[:COMFORTABLE_IN]->(l)`,
-        { uid: patch.id, lid: lang.toLowerCase() },
+        { uid: patch.id, langs: comfortable },
       );
     }
   }
@@ -124,13 +133,23 @@ export async function patchUser(
 }
 
 // ── Interests ─────────────────────────────────────────────────────────────
-// Bulk replace of a user's LIKES edges, server-canonicalised.
+// Bulk replace of a user's LIKES edges, server-canonicalised. Runs as two
+// UNWIND queries (LIKES batch + inferred RELATED_TO batch) instead of one
+// round trip per topic — onboarding writes ~20 topics, so this is the
+// difference between 1–2 network hops to AuraDB and 20+.
+//
+// Non-canonical topics also get linked into the ontology here via
+// inferTopicLinks(): the LLM's keyword tags and token overlap with canonical
+// ids become RELATED_TO edges, so long-tail interests participate in the
+// 2-hop graph expansion instead of dead-ending as orphan nodes.
 
 export interface InterestTopic {
   title: string;
   weight?: number;
   source?: "voice-analysis" | "signup" | "edited" | "seed";
   hidden?: boolean;
+  /** LLM keyword tags for the topic — used to auto-link long-tail topics. */
+  tags?: string[];
 }
 
 export interface WriteInterestsPayload {
@@ -142,40 +161,79 @@ export interface WriteInterestsPayload {
 export async function writeInterests(
   tx: ManagedTransaction,
   payload: WriteInterestsPayload,
-): Promise<{ written: number; skipped: number }> {
+): Promise<{ written: number; skipped: number; inferred_links: number }> {
   const now = new Date().toISOString();
-  let written = 0;
-  let skipped = 0;
 
   await tx.run(
     `MATCH (u:User {id: $id})-[r:LIKES]->(:Topic) DELETE r`,
     { id: payload.user_id },
   );
 
+  const seen = new Set<string>();
+  const rows: Array<{
+    topicId: string;
+    title: string;
+    canonical: boolean;
+    weight: number;
+    source: string;
+  }> = [];
+  const linkRows: Array<{ fromId: string; toId: string; kind: string; weight: number }> = [];
+  let skipped = 0;
+
   for (const t of payload.topics) {
     const { id: topicId, title, canonical } = canonicalizeTopic(t.title);
-    if (!topicId) {
+    if (!topicId || seen.has(topicId)) {
       skipped++;
       continue;
     }
-    const weight = t.hidden ? 0 : (typeof t.weight === "number" ? t.weight : 1.0);
-    const source = t.source ?? "voice-analysis";
-    await tx.run(
-      `MERGE (top:Topic {id: $topicId})
-         ON CREATE SET top.title = $title, top.tier = 'specific', top.canonical = $canonical
-         ON MATCH  SET top.title = coalesce(top.title, $title)
-       WITH top
-       MERGE (u:User {id: $userId})
-       MERGE (u)-[r:LIKES]->(top)
-         SET r.weight = $weight,
-             r.source = $source,
-             r.updated_at = $now${payload.demo ? ", r.demo = true" : ""}`,
-      { topicId, title, canonical, userId: payload.user_id, weight, source, now },
-    );
-    written++;
+    seen.add(topicId);
+    rows.push({
+      topicId,
+      title,
+      canonical,
+      weight: t.hidden ? 0 : typeof t.weight === "number" ? t.weight : 1.0,
+      source: t.source ?? "voice-analysis",
+    });
+    if (!canonical) {
+      for (const link of inferTopicLinks(topicId, t.tags)) {
+        linkRows.push({
+          fromId: topicId,
+          toId: link.toId,
+          kind: link.kind,
+          weight: link.weight,
+        });
+      }
+    }
   }
 
-  return { written, skipped };
+  if (rows.length > 0) {
+    await tx.run(
+      `MERGE (u:User {id: $userId})
+       WITH u
+       UNWIND $rows AS row
+       MERGE (top:Topic {id: row.topicId})
+         ON CREATE SET top.title = row.title, top.tier = 'specific', top.canonical = row.canonical
+         ON MATCH  SET top.title = coalesce(top.title, row.title)
+       MERGE (u)-[r:LIKES]->(top)
+         SET r.weight = row.weight,
+             r.source = row.source,
+             r.updated_at = $now${payload.demo ? ", r.demo = true" : ""}`,
+      { userId: payload.user_id, rows, now },
+    );
+  }
+
+  if (linkRows.length > 0) {
+    await tx.run(
+      `UNWIND $links AS link
+       MATCH (from:Topic {id: link.fromId})
+       MERGE (to:Topic {id: link.toId})
+       MERGE (from)-[r:RELATED_TO {kind: link.kind}]->(to)
+         SET r.weight = link.weight, r.inferred = true`,
+      { links: linkRows },
+    );
+  }
+
+  return { written: rows.length, skipped, inferred_links: linkRows.length };
 }
 
 // ── Voice profile ─────────────────────────────────────────────────────────

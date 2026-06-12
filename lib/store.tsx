@@ -346,6 +346,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           neighbourhood: p.neighbourhood,
           score: p.score,
           reasons: p.reasons,
+          sync: p.sync,
+          shared: p.shared,
         })),
       }));
     }
@@ -613,6 +615,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             weight: t.hidden ? 0 : 1,
             source: "voice-analysis" as const,
             hidden: !!t.hidden,
+            tags: t.tags,
           })),
           ...state.minorInterests.map((title) => ({
             title,

@@ -17,6 +17,10 @@ export interface SimilarPerson {
   neighbourhood: string;
   score: number;
   reasons: string[];
+  /** 0–99 "interest sync" percentage from match-live. */
+  sync?: number;
+  /** Human-friendly shared-interest labels, rarest/strongest first. */
+  shared?: string[];
 }
 
 export interface PipelineTopic {
