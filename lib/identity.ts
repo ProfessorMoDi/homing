@@ -1,19 +1,20 @@
-// First-name display gating. HOMING's posture is "Activity first. Profile
-// never," so a person's first name is only shown once the viewer has chosen to
-// share their own (reciprocal "share yours to see theirs"). The consent is
-// captured in the chat window and stored as `shareFirstName` on app state.
+// First-name display gating for the *discovery* surface ("who is similar to
+// you"). HOMING's posture is "Activity first. Profile never," so on discovery a
+// person's first name is only shown once the viewer has opted in to sharing
+// their own (reciprocal "share yours to see theirs"). Captured in onboarding
+// as `shareNameWithSimilar`. Note: this does NOT apply to the group chat —
+// sharing names with a matched + verified group is mandatory there.
 
 export const ANON_MEMBER_LABEL = "HOMING member";
-export const ANON_SENDER_LABEL = "Someone";
 
 // Returns the first name when sharing is on, otherwise a neutral label.
-// `shareFirstName === null` (not yet asked) is treated as not shared.
+// `share === null` (not yet asked) is treated as not shared.
 export function sharedName(
   firstName: string | null | undefined,
-  shareFirstName: boolean | null,
+  share: boolean | null,
   fallback: string = ANON_MEMBER_LABEL,
 ): string {
-  if (shareFirstName === true) {
+  if (share === true) {
     const name = firstName?.trim();
     if (name) return name;
   }

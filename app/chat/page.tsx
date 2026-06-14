@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Sparkle, Pencil, X, UserCheck } from "lucide-react";
+import { Send, Sparkle, Pencil, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, Avatar } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAppMode } from "@/lib/useAppMode";
 import type { Activity } from "@/lib/types";
 import { formatDuration } from "@/lib/formatActivity";
-import { ANON_SENDER_LABEL, sharedName } from "@/lib/identity";
 
 interface ChatMessage {
   id: string;
@@ -50,21 +49,12 @@ const INITIAL: ChatMessage[] = [
 
 export default function Chat() {
   const router = useRouter();
-  const { state, acceptedInvitees, setShareFirstName } = useApp();
+  const { state, acceptedInvitees } = useApp();
   const isDemo = useAppMode() === "demo";
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
   const [draft, setDraft] = useState(() => buildDraft(state.activity));
   const [draftOpen, setDraftOpen] = useState(true);
   const [input, setInput] = useState("");
-  const share = state.shareFirstName;
-  const myName = state.signup.first_name?.trim();
-  // Render a stored sender through the consent gate: HOMING and your own
-  // messages are never anonymized; everyone else shows their first name only
-  // once you've chosen to share yours.
-  const showSender = (m: ChatMessage): string =>
-    m.self || m.sender === "HOMING"
-      ? m.sender
-      : sharedName(m.sender, share, ANON_SENDER_LABEL);
 
   function send(content: string) {
     if (!content.trim()) return;
@@ -137,7 +127,7 @@ export default function Chat() {
             }
           >
             {!m.self && m.sender !== "HOMING" && (
-              <Avatar name={showSender(m)} color="sky" />
+              <Avatar name={m.sender} color="sky" />
             )}
             <div
               className={
@@ -151,7 +141,7 @@ export default function Chat() {
             >
               {!m.self && m.sender !== "HOMING" && (
                 <p className="text-[11.5px] text-[var(--color-muted)] mb-0.5">
-                  {showSender(m)}
+                  {m.sender}
                 </p>
               )}
               {m.content}
@@ -159,51 +149,6 @@ export default function Chat() {
           </div>
         ))}
       </div>
-
-      {share === null && (
-        <Card className="!bg-[var(--color-paper)] mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="grid place-items-center h-7 w-7 rounded-full bg-[var(--color-sage-soft)] text-[var(--color-sage-deep)]">
-              <UserCheck size={14} />
-            </span>
-            <p className="text-[13px] font-medium">
-              Share your first name{myName ? `, ${myName},` : ""} with this
-              group?
-            </p>
-          </div>
-          <p className="text-[12.5px] text-[var(--color-ink-soft)] leading-relaxed mb-3">
-            HOMING keeps you anonymous by default. If you share, everyone here
-            sees your first name — and you see theirs. You can stay anonymous
-            and still chat.
-          </p>
-          <div className="flex gap-2">
-            <button
-              className="btn-primary !py-2 !text-[13px] flex-1"
-              onClick={() => setShareFirstName(true)}
-            >
-              Yes, share my name
-            </button>
-            <button
-              className="btn-secondary !w-auto !py-2 !text-[13px] px-3"
-              onClick={() => setShareFirstName(false)}
-            >
-              Stay anonymous
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {share === false && (
-        <p className="text-[12px] text-[var(--color-muted)] mb-4 inline-flex items-center gap-1.5">
-          <UserCheck size={12} /> You&apos;re anonymous in this group.{" "}
-          <button
-            className="text-[var(--color-sage-deep)] font-medium underline"
-            onClick={() => setShareFirstName(true)}
-          >
-            Share my name
-          </button>
-        </p>
-      )}
 
       {draftOpen && (
         <Card className="!bg-[var(--color-sage-soft)] !border-transparent mb-4">

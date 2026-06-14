@@ -39,7 +39,16 @@ const LABELS: Record<string, string> = Object.fromEntries([
   ...COMMIT,
 ]);
 
-type FieldKey = "gender" | "postcode" | "availability" | "commitment";
+type FieldKey =
+  | "gender"
+  | "postcode"
+  | "shareName"
+  | "availability"
+  | "commitment";
+
+// Keys backed by the signup object (everything except shareName, which is
+// stored top-level as shareNameWithSimilar).
+type SignupFieldKey = Exclude<FieldKey, "shareName">;
 
 interface Signup {
   gender: string;
@@ -47,6 +56,11 @@ interface Signup {
   availability: string[];
   commitment: string;
 }
+
+const SHARE_NAME = [
+  ["yes", "Yes, show my first name"],
+  ["no", "Keep me anonymous for now"],
+] as const;
 
 interface Question {
   key: FieldKey;
@@ -73,6 +87,15 @@ const QUESTIONS: Record<FieldKey, Question> = {
     title: "What's your postcode?",
     subtitle: "We use it to lean toward activities near you. Any country is fine.",
   },
+  shareName: {
+    key: "shareName",
+    kind: "single",
+    eyebrow: "Finding your people",
+    title: "Show your first name to people similar to you?",
+    subtitle:
+      "When Homi finds someone who shares your interests, we can show them your first name — and show you theirs. (Your group always sees your name once you meet.)",
+    options: SHARE_NAME,
+  },
   availability: {
     key: "availability",
     kind: "multi",
@@ -91,29 +114,40 @@ const QUESTIONS: Record<FieldKey, Question> = {
 };
 
 function profileQuestionOrder(_missingFields: string[]): FieldKey[] {
-  return ["gender", "postcode", "availability", "commitment"];
+  return ["gender", "postcode", "shareName", "availability", "commitment"];
 }
 
 function snapshotSteps(
   fromVoice: boolean,
   signup: Signup,
   missingFields: string[],
+  shareNameWithSimilar: boolean | null,
 ): FieldKey[] {
   const order = profileQuestionOrder(missingFields);
   if (fromVoice) {
     return order.filter(
-      (k) => k === "gender" || k === "postcode" || !isDone(k, signup),
+      (k) =>
+        k === "gender" ||
+        k === "postcode" ||
+        k === "shareName" ||
+        !isDone(k, signup, shareNameWithSimilar),
     );
   }
-  return order.filter((k) => !isDone(k, signup));
+  return order.filter((k) => !isDone(k, signup, shareNameWithSimilar));
 }
 
-function isDone(key: FieldKey, s: Signup): boolean {
+function isDone(
+  key: FieldKey,
+  s: Signup,
+  shareNameWithSimilar: boolean | null,
+): boolean {
   switch (key) {
     case "gender":
       return !!s.gender;
     case "postcode":
       return s.postcode.trim().length >= 3;
+    case "shareName":
+      return shareNameWithSimilar !== null;
     case "availability":
       return s.availability.length > 0;
     case "commitment":
@@ -169,6 +203,7 @@ function SignUpDetails() {
   const {
     state,
     setSignup,
+    setShareNameWithSimilar,
     flushGraphMirror,
     fillSignupRandom,
     hydrated,
@@ -206,7 +241,12 @@ function SignUpDetails() {
   useEffect(() => {
     if (!hydrated) return;
     if (snapshottedFor === profileSessionId && steps !== null) return;
-    const snap = snapshotSteps(fromVoice, state.signup, state.missingFields);
+    const snap = snapshotSteps(
+      fromVoice,
+      state.signup,
+      state.missingFields,
+      state.shareNameWithSimilar,
+    );
     setSnapshottedFor(profileSessionId);
     setSteps(snap);
     setIdx(0);
@@ -270,12 +310,16 @@ function SignUpDetails() {
   }
 
   function onSingle(key: FieldKey, value: string) {
+    if (key === "shareName") {
+      setShareNameWithSimilar(value === "yes");
+      return;
+    }
     setSignup({ [key]: value });
   }
 
   function currentValid(): boolean {
     if (!current) return true;
-    return isDone(current, s);
+    return isDone(current, s, state.shareNameWithSimilar);
   }
 
   function onContinue() {
@@ -444,7 +488,11 @@ function SignUpDetails() {
         {q.kind === "single" && (
           <div className="grid gap-2.5">
             {q.options!.map(([k, v]) => {
-              const selected = (s[q.key] as string) === k;
+              const selected =
+                q.key === "shareName"
+                  ? (state.shareNameWithSimilar === true && k === "yes") ||
+                    (state.shareNameWithSimilar === false && k === "no")
+                  : (s[q.key as SignupFieldKey] as string) === k;
               return (
                 <button
                   key={k}
@@ -480,10 +528,10 @@ function SignUpDetails() {
               <ChipToggle
                 key={k}
                 label={v}
-                selected={(s[q.key] as string[]).includes(k)}
+                selected={(s[q.key as SignupFieldKey] as string[]).includes(k)}
                 onToggle={() => {
-                  const next = toggleArr(s[q.key] as string[], k);
-                  setSignup({ [q.key]: next });
+                  const next = toggleArr(s[q.key as SignupFieldKey] as string[], k);
+                  setSignup({ [q.key as SignupFieldKey]: next });
                 }}
               />
             ))}

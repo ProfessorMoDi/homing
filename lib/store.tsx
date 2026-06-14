@@ -111,11 +111,13 @@ interface State {
     notes?: string;
   };
   /**
-   * First-name sharing consent. null = not yet asked (treated as not shared);
-   * true = share with the group / matched people; false = stay anonymous.
-   * Asked in the chat window; gates names in chat and "who is similar to you".
+   * Consent to show your first name to people we identify as *similar to you*
+   * (the "who is similar to you" discovery surface). null = not yet asked
+   * (treated as not shared); true = show my name to similar people; false =
+   * stay anonymous in discovery. Group chat always shows names — sharing with
+   * a matched + verified group is mandatory and not gated here.
    */
-  shareFirstName: boolean | null;
+  shareNameWithSimilar: boolean | null;
 }
 
 const initialState: State = {
@@ -151,7 +153,7 @@ const initialState: State = {
   inviteResponses: {},
   verified: [],
   feedback: { people: {} },
-  shareFirstName: null,
+  shareNameWithSimilar: null,
 };
 
 interface SuggestedActivity {
@@ -277,8 +279,8 @@ interface Ctx {
   removeTopic: (id: string) => void;
   toggleHideTopic: (id: string) => void;
   setActivity: (patch: Partial<Activity>) => void;
-  /** First-name sharing consent (null = undecided). Set from the chat window. */
-  setShareFirstName: (share: boolean) => void;
+  /** Consent to show your name to similar people (null = undecided). Set in onboarding. */
+  setShareNameWithSimilar: (share: boolean) => void;
   /** Add an activity id to the Neo4j sync set so it pre-warms before editing. */
   markActivityForSync: (id: string) => void;
   matches: MatchResult[];
@@ -970,8 +972,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  const setShareFirstName = useCallback((share: boolean) => {
-    setState((s) => ({ ...s, shareFirstName: share }));
+  const setShareNameWithSimilar = useCallback((share: boolean) => {
+    setState((s) => ({ ...s, shareNameWithSimilar: share }));
   }, []);
 
   // Pre-warm the graph for an activity the moment the user picks it on
@@ -1251,7 +1253,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeTopic,
     toggleHideTopic,
     setActivity,
-    setShareFirstName,
+    setShareNameWithSimilar,
     markActivityForSync,
     matches,
     matchSource,

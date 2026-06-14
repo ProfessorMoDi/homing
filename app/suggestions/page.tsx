@@ -376,12 +376,8 @@ export default function Suggestions() {
           </h2>
           <p className="text-[12px] text-[var(--color-muted)] mb-3">
             Optional — people in the network who share your interests.
-            {state.shareFirstName !== true && similarPeople.length > 0 && (
-              <>
-                {" "}
-                Names appear once you choose to share yours — you&apos;ll be
-                asked in the group chat.
-              </>
+            {state.shareNameWithSimilar === false && similarPeople.length > 0 && (
+              <> You chose to stay anonymous, so names are hidden both ways.</>
             )}
           </p>
           {peopleLoading ? (
@@ -405,7 +401,7 @@ export default function Suggestions() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="display text-[17px]">
-                          {sharedName(p.first_name, state.shareFirstName)}
+                          {sharedName(p.first_name, state.shareNameWithSimilar)}
                         </p>
                         <p className="text-[12.5px] text-[var(--color-muted)]">
                           {p.neighbourhood}
