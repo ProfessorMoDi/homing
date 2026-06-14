@@ -11,6 +11,18 @@
 import type { Activity } from "./types";
 import { DEMO_ID } from "./currentUser";
 import { writesEnabled } from "./appMode";
+import { getFirebaseAuth, isFirebaseConfigured } from "./firebase";
+
+// Current user's Firebase ID token, for routes that authorize "own data only".
+// Null when not signed in or Firebase isn't configured.
+async function idToken(): Promise<string | null> {
+  if (!isFirebaseConfigured()) return null;
+  try {
+    return (await getFirebaseAuth().currentUser?.getIdToken()) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // Patch-style sync of signup data into Neo4j as a User node. Fail-soft.
 export interface SignupSync {
@@ -259,8 +271,13 @@ export interface GraphUserData {
 
 export async function fetchUserData(id: string): Promise<GraphUserData | null> {
   if (!id) return null;
+  // The read is authorized "own data only" — attach the Firebase ID token.
+  const token = await idToken();
+  if (!token) return null;
   try {
-    const r = await fetch(`/api/neo4j/user?id=${encodeURIComponent(id)}`);
+    const r = await fetch(`/api/neo4j/user?id=${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (!r.ok) return null;
     return (await r.json()) as GraphUserData;
   } catch {

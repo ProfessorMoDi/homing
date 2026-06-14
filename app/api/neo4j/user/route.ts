@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withRead, withWrite } from "../../../../lib/neo4j";
 import { patchUser, type UserPatch } from "../../../../lib/neo4j-writes";
+import { requireOwner } from "../../../../lib/authGuard";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -25,6 +26,17 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")?.trim();
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  // This returns personal data (name, postcode, age, interests), so the caller
+  // must prove — via a verified Firebase ID token — that they ARE this user.
+  // Fails closed: no/invalid token or unconfigured Admin SDK → reject.
+  const auth = await requireOwner(req, id);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: auth.status === 403 ? "forbidden" : "unauthorized" },
+      { status: auth.status },
+    );
   }
 
   try {
