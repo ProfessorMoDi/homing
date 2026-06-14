@@ -9,7 +9,8 @@ import { Label, PrimaryButton } from "@/components/Bits";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { exitDemoSession } from "@/lib/appMode";
-import { SIGNUP_LINK_SENT_KEY } from "@/lib/signupFlow";
+import { resolveUserContext } from "@/lib/currentUser";
+import { RETURNING_EMAIL_KEY, SIGNUP_LINK_SENT_KEY } from "@/lib/signupFlow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -42,8 +43,8 @@ function magicLinkErrorMessage(e: unknown, authReady: boolean): string {
 }
 
 export default function SignUp() {
-  const { state, setSignup, commitSignup } = useApp();
-  const { ready, sendMagicLink, signInWithGoogle } = useAuth();
+  const { state, setSignup, commitSignup, hydrateFromGraph } = useApp();
+  const { ready, sendMagicLink, emailHasAccount, signInWithGoogle } = useAuth();
   const router = useRouter();
   const s = state.signup;
 
@@ -65,6 +66,18 @@ export default function SignUp() {
     setError(null);
     setSending(true);
     setBusy(true);
+    // If this email already has an account, don't start a second onboarding —
+    // send them to sign in instead. (No-op when Firebase can't tell, e.g.
+    // email enumeration protection — then it falls through to normal signup.)
+    if (await emailHasAccount(s.email)) {
+      try {
+        sessionStorage.setItem(RETURNING_EMAIL_KEY, s.email.trim().toLowerCase());
+      } catch {
+        /* private mode */
+      }
+      router.push("/login");
+      return;
+    }
     exitDemoSession();
     commitSignup();
     try {
@@ -90,10 +103,22 @@ export default function SignUp() {
     exitDemoSession();
     try {
       const user = await signInWithGoogle();
+      const email = user.email || s.email;
       setSignup({
-        email: user.email || s.email,
+        email,
         first_name: s.first_name || user.displayName?.split(" ")[0] || "",
       });
+      // Returning Google account → skip onboarding, open the events page.
+      // Prefer local session, else reload from the graph.
+      if (state.topics.length > 0) {
+        router.push("/suggestions");
+        return;
+      }
+      const loaded = await hydrateFromGraph(resolveUserContext({ email }).id);
+      if (loaded) {
+        router.push("/suggestions");
+        return;
+      }
       commitSignup();
       router.push("/voice");
     } catch (e) {

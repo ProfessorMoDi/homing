@@ -13,48 +13,37 @@ import { PrimaryButton, Label } from "@/components/Bits";
 import { SoftSpinner } from "@/components/Loading";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { resolveUserContext } from "@/lib/currentUser";
 
 type Phase = "working" | "need-email" | "error";
 
-function profileLooksComplete(signup: {
-  gender: string;
-  postcode: string;
-  availability: string[];
-  commitment: string;
-}): boolean {
-  return (
-    !!signup.gender &&
-    signup.postcode.trim().length >= 3 &&
-    signup.availability.length > 0 &&
-    !!signup.commitment
-  );
-}
-
 export default function AuthFinish() {
   const router = useRouter();
-  const { state, setSignup } = useApp();
+  const { state, setSignup, hydrateFromGraph } = useApp();
   const { ready, isMagicLinkUrl, completeMagicLink } = useAuth();
   const [phase, setPhase] = useState<Phase>("working");
   const [email, setEmail] = useState("");
   const ran = useRef(false);
 
-  function onSignedIn(verifiedEmail: string) {
+  // Hybrid returning-user routing: prefer this browser's local session, else
+  // reload the account from Neo4j. Either way a known user lands on the events
+  // page (/suggestions) and never re-onboards. Only a genuinely new account
+  // (no local data, nothing in the graph) goes to /voice.
+  async function onSignedIn(verifiedEmail: string) {
     setSignup({ email: verifiedEmail });
     if (state.topics.length > 0) {
-      router.replace(
-        profileLooksComplete(state.signup)
-          ? "/themes"
-          : "/signup/details?fromVoice=1",
-      );
+      router.replace("/suggestions");
       return;
     }
-    router.replace("/voice");
+    const id = resolveUserContext({ email: verifiedEmail }).id;
+    const loaded = await hydrateFromGraph(id);
+    router.replace(loaded ? "/suggestions" : "/voice");
   }
 
   async function finish(emailOverride?: string) {
     try {
       const verified = await completeMagicLink(emailOverride);
-      onSignedIn(verified);
+      await onSignedIn(verified);
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "MISSING_EMAIL") {

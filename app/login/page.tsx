@@ -4,11 +4,12 @@
 // doesn't require verifying anything. Here we email a one-tap link; clicking it
 // lands on /auth/finish and restores the session.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Mail, RotateCcw, AlertCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Label, PrimaryButton, SecondaryButton } from "@/components/Bits";
 import { useAuth } from "@/lib/auth";
+import { RETURNING_EMAIL_KEY } from "@/lib/signupFlow";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -17,6 +18,21 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [phase, setPhase] = useState<"form" | "sending" | "sent">("form");
   const [error, setError] = useState<string | null>(null);
+  const [returning, setReturning] = useState(false);
+
+  // Redirected here from signup because the email already has an account.
+  useEffect(() => {
+    try {
+      const prefill = sessionStorage.getItem(RETURNING_EMAIL_KEY);
+      if (prefill) {
+        setEmail(prefill);
+        setReturning(true);
+        sessionStorage.removeItem(RETURNING_EMAIL_KEY);
+      }
+    } catch {
+      /* private mode */
+    }
+  }, []);
 
   const trimmed = email.trim();
   const emailOk = EMAIL_RE.test(trimmed);
@@ -84,6 +100,16 @@ export default function Login() {
       <p className="text-[13.5px] text-[var(--color-muted)] mb-6">
         Enter your email and we&apos;ll send a one-tap link to sign you in.
       </p>
+
+      {returning && (
+        <div className="card-outline p-3 mb-5 flex items-start gap-2 border-[var(--color-sage)]">
+          <Mail size={15} className="text-[var(--color-sage-deep)] mt-0.5 shrink-0" />
+          <p className="text-[12.5px] text-[var(--color-ink-soft)]">
+            You already have an account with this email — sign in and we&apos;ll
+            take you straight to your activities.
+          </p>
+        </div>
+      )}
 
       <div className="mb-5">
         <Label>Email</Label>

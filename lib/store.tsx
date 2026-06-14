@@ -37,6 +37,7 @@ import { setCached, topicSignature } from "./suggestionsCache";
 import {
   fetchLiveMatch,
   fetchMatchCandidates,
+  fetchUserData,
   persistActivity,
   persistAndMatch,
   syncFeedback,
@@ -281,6 +282,8 @@ interface Ctx {
   setActivity: (patch: Partial<Activity>) => void;
   /** Consent to show your name to similar people (null = undecided). Set in onboarding. */
   setShareNameWithSimilar: (share: boolean) => void;
+  /** Reload a returning user's profile + interests + activities from Neo4j. */
+  hydrateFromGraph: (id: string) => Promise<boolean>;
   /** Add an activity id to the Neo4j sync set so it pre-warms before editing. */
   markActivityForSync: (id: string) => void;
   matches: MatchResult[];
@@ -976,6 +979,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, shareNameWithSimilar: share }));
   }, []);
 
+  // Returning-user reload. Pulls the stored profile + interests + activities
+  // from Neo4j into state so a sign-in on a fresh device can skip onboarding
+  // and open the events page populated. Returns true only when there's real
+  // data to show. Email is left untouched (auth/finish owns it).
+  const hydrateFromGraph = useCallback(async (id: string): Promise<boolean> => {
+    const data = await fetchUserData(id);
+    if (!data?.exists || !data.profile) return false;
+    const topics = (data.topics ?? []).filter(Boolean);
+    const activities = (data.activities ?? []).map((a) => normalizeActivity(a));
+    if (topics.length === 0 && activities.length === 0) return false;
+
+    // Don't let the background persist effect re-push reloaded activities.
+    for (const a of activities) if (a.id) syncedRef.current.add(a.id);
+
+    const p = data.profile;
+    setState((s) => ({
+      ...s,
+      signup: {
+        ...s.signup,
+        first_name: p.first_name || s.signup.first_name,
+        gender: p.gender || s.signup.gender,
+        postcode: p.postcode || s.signup.postcode,
+        commitment: p.commitment || s.signup.commitment,
+        age: p.age ?? s.signup.age,
+        availability: p.availability.length ? p.availability : s.signup.availability,
+        languages_comfortable: p.languages_comfortable.length
+          ? p.languages_comfortable
+          : s.signup.languages_comfortable,
+        languages_spoken: p.languages_spoken.length
+          ? p.languages_spoken
+          : s.signup.languages_spoken,
+      },
+      topics: topics.map((title, i) => ({
+        id: `t_graph_${i}`,
+        title,
+        explanation: "",
+        tags: [],
+      })),
+      suggestedActivities:
+        activities.length > 0 ? activities : s.suggestedActivities,
+    }));
+    return true;
+  }, []);
+
   // Pre-warm the graph for an activity the moment the user picks it on
   // /suggestions, so the edit-page debounced sync (and the eventual match)
   // run against an Activity node that already exists.
@@ -1254,6 +1301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleHideTopic,
     setActivity,
     setShareNameWithSimilar,
+    hydrateFromGraph,
     markActivityForSync,
     matches,
     matchSource,

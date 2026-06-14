@@ -236,6 +236,38 @@ export interface GraphMatchCandidate {
   rare?: string[];
 }
 
+// Returning-user reload: profile + interest titles + created activities.
+// Returns null on any failure (graph down / not found) so callers can fall
+// back to local state or onboarding.
+export interface GraphUserData {
+  exists: boolean;
+  profile?: {
+    first_name: string;
+    gender: string;
+    postcode: string;
+    neighbourhood: string;
+    commitment: string;
+    age: number | null;
+    profile_completed: boolean;
+    availability: string[];
+    languages_comfortable: string[];
+    languages_spoken: string[];
+  };
+  topics?: string[];
+  activities?: Activity[];
+}
+
+export async function fetchUserData(id: string): Promise<GraphUserData | null> {
+  if (!id) return null;
+  try {
+    const r = await fetch(`/api/neo4j/user?id=${encodeURIComponent(id)}`);
+    if (!r.ok) return null;
+    return (await r.json()) as GraphUserData;
+  } catch {
+    return null;
+  }
+}
+
 export async function persistActivity(activity: Activity): Promise<boolean> {
   if (!writesEnabled()) return false;
   try {

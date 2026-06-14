@@ -19,6 +19,7 @@ import {
   useState,
 } from "react";
 import {
+  fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   isSignInWithEmailLink,
   onAuthStateChanged,
@@ -41,6 +42,13 @@ interface AuthCtx {
   /** Email the magic link was last sent to (for the "check your inbox" screen). */
   pendingEmail: string | null;
   sendMagicLink: (email: string) => Promise<void>;
+  /**
+   * True when the email already has a Firebase account (any sign-in method).
+   * Returns false when it can't tell — Firebase "email enumeration protection",
+   * when enabled, makes this always report no methods, so callers must treat a
+   * false as "unknown / proceed", never as a hard "definitely new".
+   */
+  emailHasAccount: (email: string) => Promise<boolean>;
   /** Completes a magic-link sign-in from the current URL. Returns the email. */
   completeMagicLink: (emailOverride?: string) => Promise<string>;
   isMagicLinkUrl: () => boolean;
@@ -80,6 +88,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     setPendingEmail(clean);
   }, []);
+
+  const emailHasAccount = useCallback(
+    async (email: string): Promise<boolean> => {
+      if (!ready) return false;
+      const clean = email.trim().toLowerCase();
+      if (!clean) return false;
+      try {
+        const methods = await fetchSignInMethodsForEmail(getFirebaseAuth(), clean);
+        return methods.length > 0;
+      } catch {
+        // Network/config error or enumeration protection — can't tell, so let
+        // the caller proceed as if new (no false "account exists" blocks).
+        return false;
+      }
+    },
+    [ready],
+  );
 
   const isMagicLinkUrl = useCallback(() => {
     if (!ready) return false;
@@ -126,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ready,
         pendingEmail,
         sendMagicLink,
+        emailHasAccount,
         completeMagicLink,
         isMagicLinkUrl,
         signInWithGoogle,
