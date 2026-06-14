@@ -59,13 +59,16 @@ export default function EditActivity() {
     setActivity({ note: deriveNote(a.title) });
   }
 
-  async function ask() {
+  function ask() {
     if (asking) return;
     setAsking(true);
-    // Kick off the graph match before navigating so /activity/finding opens
-    // with the ranked group already in hand (and the dev panel timeline in
-    // sync). Fail-soft: persistAndMatch swallows graph errors internally.
-    await simulateInvites();
+    // Navigate immediately and run the graph match in the background. The
+    // finding screen renders its own loading state (matchLoading) and reacts
+    // when matches land, so we never block the tap on a cold AuraDB round-trip
+    // — the old `await` here was the main cause of multi-second "Ask people"
+    // freezes when the edit-page debounce hadn't warmed the match yet.
+    // Fail-soft: simulateInvites swallows graph errors internally.
+    void simulateInvites();
     router.push("/activity/finding");
   }
 
