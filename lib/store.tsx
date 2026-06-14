@@ -67,6 +67,7 @@ import {
   TRANSCRIPT_VARIANTS,
   type Archetype,
 } from "./archetypes";
+import { normalizeActivity } from "./formatActivity";
 
 interface Signup {
   first_name: string;
@@ -109,6 +110,12 @@ interface State {
     people: Record<string, "again" | "neutral" | "avoid">;
     notes?: string;
   };
+  /**
+   * First-name sharing consent. null = not yet asked (treated as not shared);
+   * true = share with the group / matched people; false = stay anonymous.
+   * Asked in the chat window; gates names in chat and "who is similar to you".
+   */
+  shareFirstName: boolean | null;
 }
 
 const initialState: State = {
@@ -144,6 +151,7 @@ const initialState: State = {
   inviteResponses: {},
   verified: [],
   feedback: { people: {} },
+  shareFirstName: null,
 };
 
 interface SuggestedActivity {
@@ -269,6 +277,8 @@ interface Ctx {
   removeTopic: (id: string) => void;
   toggleHideTopic: (id: string) => void;
   setActivity: (patch: Partial<Activity>) => void;
+  /** First-name sharing consent (null = undecided). Set from the chat window. */
+  setShareFirstName: (share: boolean) => void;
   /** Add an activity id to the Neo4j sync set so it pre-warms before editing. */
   markActivityForSync: (id: string) => void;
   matches: MatchResult[];
@@ -366,8 +376,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<State>;
-        setState({ ...initialState, ...parsed });
-        for (const a of parsed.suggestedActivities ?? []) {
+        // Normalize any rehydrated activities — older localStorage shapes can
+        // miss the tag arrays, which crashes the activity screens on spread /
+        // index. normalizeActivity backfills them defensively.
+        const safe: Partial<State> = { ...parsed };
+        if (parsed.activity) safe.activity = normalizeActivity(parsed.activity);
+        if (parsed.suggestedActivities) {
+          safe.suggestedActivities = parsed.suggestedActivities.map(normalizeActivity);
+        }
+        setState({ ...initialState, ...safe });
+        for (const a of safe.suggestedActivities ?? []) {
           if (a?.id) syncedRef.current.add(a.id);
         }
       }
@@ -946,7 +964,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setActivity = useCallback((patch: Partial<Activity>) => {
-    setState((s) => ({ ...s, activity: { ...s.activity, ...patch } }));
+    setState((s) => ({
+      ...s,
+      activity: normalizeActivity({ ...s.activity, ...patch }),
+    }));
+  }, []);
+
+  const setShareFirstName = useCallback((share: boolean) => {
+    setState((s) => ({ ...s, shareFirstName: share }));
   }, []);
 
   // Pre-warm the graph for an activity the moment the user picks it on
@@ -1226,6 +1251,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     removeTopic,
     toggleHideTopic,
     setActivity,
+    setShareFirstName,
     markActivityForSync,
     matches,
     matchSource,

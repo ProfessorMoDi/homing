@@ -51,8 +51,8 @@ export default function Finding() {
   const a = state.activity;
   const graphMatch = matchSource === "graph";
   const stages = buildStages(
-    a.specific_interest_tags,
-    a.broader_interest_tags,
+    a.specific_interest_tags ?? [],
+    a.broader_interest_tags ?? [],
     graphMatch,
   );
   const [stage, setStage] = useState(0);

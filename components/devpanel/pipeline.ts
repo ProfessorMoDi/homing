@@ -182,6 +182,7 @@ export const STAGES: Stage[] = [
       "POST /api/neo4j/demo-clear wipes every node and edge tagged demo:true.",
       "POST /api/neo4j/ontology re-seeds the RELATED_TO edges from taxonomy.ts.",
       "POST /api/neo4j/seed (manual) rebuilds the full seed-users + topic catalogue.",
+      "POST /api/neo4j/reset (manual) wipes EVERYTHING and rebuilds schema + ontology with no users.",
     ],
   },
   {
@@ -219,7 +220,7 @@ export function stageForUrl(url: string): StageId {
   if (url.startsWith("/api/neo4j/feedback")) return "feedback";
   if (url.startsWith("/api/neo4j/group")) return "group";
   if (url.startsWith("/api/neo4j/graph") || url.startsWith("/api/neo4j/expand")) return "visualise";
-  if (url.startsWith("/api/neo4j/demo-clear") || url.startsWith("/api/neo4j/seed") || url.startsWith("/api/neo4j/ontology")) return "graph-write";
+  if (url.startsWith("/api/neo4j/demo-clear") || url.startsWith("/api/neo4j/seed") || url.startsWith("/api/neo4j/ontology") || url.startsWith("/api/neo4j/reset")) return "graph-write";
   return "other";
 }
 

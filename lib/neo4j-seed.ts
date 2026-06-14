@@ -43,11 +43,13 @@ export async function runSchemaMigration(): Promise<void> {
   });
 }
 
-// ── Seed all 12 users + lookups ───────────────────────────────────────────────
+// ── Foundations: lookups + ontology (no users) ───────────────────────────────
+// The TimeSlot/Language lookups + canonical Topic catalogue every real signup
+// needs. Shared by seedDatabase() and the reset endpoint so a wiped graph can
+// be brought back to a clean, ontology-backed state without seeding any
+// fictional users.
 
-export async function seedDatabase(): Promise<{
-  users: number;
-  topics: number;
+export async function seedFoundations(): Promise<{
   ontology_topics: number;
   ontology_edges: number;
 }> {
@@ -63,9 +65,24 @@ export async function seedDatabase(): Promise<{
     }
   });
 
-  // Write the canonical Topic catalogue + RELATED_TO edges before users so
-  // that user :LIKES edges land on already-titled, ontology-linked nodes.
+  // Write the canonical Topic catalogue + RELATED_TO edges so user :LIKES
+  // edges land on already-titled, ontology-linked nodes.
   const ontologyStats = await withWrite((tx) => seedOntology(tx));
+  return {
+    ontology_topics: ontologyStats.topics,
+    ontology_edges: ontologyStats.edges,
+  };
+}
+
+// ── Seed all 12 users + lookups ───────────────────────────────────────────────
+
+export async function seedDatabase(): Promise<{
+  users: number;
+  topics: number;
+  ontology_topics: number;
+  ontology_edges: number;
+}> {
+  const ontologyStats = await seedFoundations();
 
   for (const user of seedUsers) {
     await withWrite((tx) => upsertUser(tx, user));
@@ -77,8 +94,8 @@ export async function seedDatabase(): Promise<{
   return {
     users: seedUsers.length,
     topics,
-    ontology_topics: ontologyStats.topics,
-    ontology_edges: ontologyStats.edges,
+    ontology_topics: ontologyStats.ontology_topics,
+    ontology_edges: ontologyStats.ontology_edges,
   };
 }
 

@@ -726,6 +726,8 @@
   cursor: pointer;
 }
 .dev-panel__action:hover { background: var(--color-cream-warm); color: var(--color-ink); }
+.dev-panel__action--danger { border-color: var(--color-clay); color: var(--color-clay); }
+.dev-panel__action--danger:hover { background: var(--color-clay-soft); color: #7d4730; }
 
 .dev-detail__parity {
   font-size: 0.78rem;

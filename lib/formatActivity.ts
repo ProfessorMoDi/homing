@@ -1,6 +1,45 @@
 // Defensive formatters for AI-returned time/duration strings, so the
 // downstream UI shows a consistent format regardless of what the model wrote.
 
+import type { Activity } from "./types";
+
+// Coerce a possibly-stale/partial Activity (e.g. one rehydrated from an older
+// localStorage shape that predates the tag fields) into a fully-formed
+// Activity. Without this, render sites that spread or index
+// `specific_interest_tags` / `broader_interest_tags` throw when those arrays
+// are `undefined` — the intermittent "can't view activities" crash. Array
+// fields default to `[]`, scalars to safe empties.
+export function normalizeActivity(a: Partial<Activity> | null | undefined): Activity {
+  const src = (a ?? {}) as Partial<Activity>;
+  const arr = (v: unknown): string[] =>
+    Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];
+  const str = (v: unknown, fallback = ""): string =>
+    typeof v === "string" ? v : fallback;
+  const num = (v: unknown, fallback: number): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : fallback;
+
+  return {
+    id: str(src.id),
+    creator_user_id: str(src.creator_user_id),
+    title: str(src.title),
+    description: str(src.description),
+    activity_type: str(src.activity_type, "one-off"),
+    specific_interest_tags: arr(src.specific_interest_tags),
+    broader_interest_tags: arr(src.broader_interest_tags),
+    day: str(src.day),
+    time: str(src.time),
+    duration: str(src.duration),
+    location_area: str(src.location_area),
+    exact_venue: str(src.exact_venue),
+    group_size_target: num(src.group_size_target, 4),
+    minimum_group_size: num(src.minimum_group_size, 3),
+    language: str(src.language, "Flexible"),
+    energy_level: str(src.energy_level),
+    note: typeof src.note === "string" ? src.note : undefined,
+    status: (src.status ?? "suggested") as Activity["status"],
+  };
+}
+
 export function formatTime(raw: string | undefined | null): string {
   if (!raw) return "";
   const s = String(raw).trim();

@@ -26,7 +26,10 @@ export default function ActivityDetails() {
   const router = useRouter();
   const a = state.activity;
   const participants = ["You", ...acceptedInvitees.map((u) => u.first_name)];
-  const allTags = [...a.specific_interest_tags, ...a.broader_interest_tags];
+  const allTags = [
+    ...(a.specific_interest_tags ?? []),
+    ...(a.broader_interest_tags ?? []),
+  ];
   const whyLine = buildWhyLine(allTags);
   const summaryLine = a.description || a.note || a.title;
   const pillTags = allTags.slice(0, 2);

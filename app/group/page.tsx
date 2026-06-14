@@ -38,8 +38,8 @@ export default function RecurringGroup() {
     ...acceptedInvitees.map((u) => u.first_name || "HOMING member"),
   ];
   const tags = [
-    ...a.specific_interest_tags,
-    ...a.broader_interest_tags,
+    ...(a.specific_interest_tags ?? []),
+    ...(a.broader_interest_tags ?? []),
   ].slice(0, 4);
 
   return (

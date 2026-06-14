@@ -142,7 +142,7 @@ export default function VoiceOnboarding() {
   }, [recording]);
 
   const mode = useAppMode();
-  const doneEnabled = seconds >= 25;
+  const doneEnabled = seconds >= 60;
   const skipEnabled = recording && seconds >= 1;
   const showDemoTools = mode === "demo";
 
@@ -221,9 +221,9 @@ export default function VoiceOnboarding() {
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
-    if (seconds < 15) {
+    if (seconds < 60) {
       setError(
-        "That was quite short — results may be thinner. For best results, aim for 30 seconds next time.",
+        "That was quite short — results may be thinner. For best results, aim for a full minute next time.",
       );
     }
     stashAudio(blob, force);
@@ -249,7 +249,7 @@ export default function VoiceOnboarding() {
         </div>
       )}
       <p className="text-[14px] text-[var(--color-ink-soft)] mb-3 text-center">
-        Aim for about 30 seconds — say several interests.
+        Aim for about a minute — say several interests.
       </p>
       <p className="text-[13.5px] text-[var(--color-muted)] mb-3 text-center px-2">
         Tell us what you&apos;ve been into lately, what you wish you did more
@@ -316,7 +316,7 @@ export default function VoiceOnboarding() {
 
         {!doneEnabled && recording && (
           <p className="text-[12px] text-[var(--color-muted)]">
-            Done unlocks after 25 seconds
+            Done unlocks after 1 minute
           </p>
         )}
       </div>

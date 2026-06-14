@@ -18,6 +18,7 @@ import { incomingInviteActivity } from "@/lib/matching";
 import type { Activity } from "@/lib/types";
 import { useApp } from "@/lib/store";
 import { formatDayTime, formatDuration } from "@/lib/formatActivity";
+import { sharedName } from "@/lib/identity";
 import { useAppMode } from "@/lib/useAppMode";
 import { pipelineStageLabel } from "@/lib/voicePipeline";
 import { ThinkingDots } from "@/components/Loading";
@@ -62,11 +63,11 @@ export default function Suggestions() {
     list.sort((a, b) => {
       const ai =
         topicOrder.get(a.title.toLowerCase()) ??
-        topicOrder.get(a.specific_interest_tags[0]?.toLowerCase() ?? "") ??
+        topicOrder.get((a.specific_interest_tags ?? [])[0]?.toLowerCase() ?? "") ??
         999;
       const bi =
         topicOrder.get(b.title.toLowerCase()) ??
-        topicOrder.get(b.specific_interest_tags[0]?.toLowerCase() ?? "") ??
+        topicOrder.get((b.specific_interest_tags ?? [])[0]?.toLowerCase() ?? "") ??
         999;
       return ai - bi;
     });
@@ -340,7 +341,10 @@ export default function Suggestions() {
                 </p>
               )}
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {[...a.specific_interest_tags, ...a.broader_interest_tags]
+                {[
+                  ...(a.specific_interest_tags ?? []),
+                  ...(a.broader_interest_tags ?? []),
+                ]
                   .slice(0, 4)
                   .map((t) => (
                     <Pill key={t}>{t}</Pill>
@@ -372,6 +376,13 @@ export default function Suggestions() {
           </h2>
           <p className="text-[12px] text-[var(--color-muted)] mb-3">
             Optional — people in the network who share your interests.
+            {state.shareFirstName !== true && similarPeople.length > 0 && (
+              <>
+                {" "}
+                Names appear once you choose to share yours — you&apos;ll be
+                asked in the group chat.
+              </>
+            )}
           </p>
           {peopleLoading ? (
             <div className="grid gap-3">
@@ -393,7 +404,9 @@ export default function Suggestions() {
                   <Card key={p.user_id}>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="display text-[17px]">{p.first_name}</p>
+                        <p className="display text-[17px]">
+                          {sharedName(p.first_name, state.shareFirstName)}
+                        </p>
                         <p className="text-[12.5px] text-[var(--color-muted)]">
                           {p.neighbourhood}
                         </p>

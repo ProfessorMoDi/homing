@@ -35,6 +35,7 @@ export function DevPanel() {
   const [focusedStage, setFocusedStage] = useState<StageId | "auto">("auto");
   const [clearing, setClearing] = useState(false);
   const [seeding, setSeeding] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [seedNote, setSeedNote] = useState<string | null>(null);
 
   async function clearDemo() {
@@ -62,6 +63,36 @@ export function DevPanel() {
       setSeedNote("Seed failed");
     }
     setSeeding(false);
+  }
+
+  async function resetDb() {
+    if (
+      !window.confirm(
+        "Wipe the ENTIRE Neo4j graph (all users, activities, demo + real data) and rebuild schema + ontology with no users? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    setSeedNote(null);
+    try {
+      const r = await fetch("/api/neo4j/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "RESET" }),
+      });
+      const data = (await r.json().catch(() => null)) as
+        | { nodes_deleted?: number; ontology_edges?: number }
+        | null;
+      setSeedNote(
+        r.ok && data
+          ? `Reset: wiped ${data.nodes_deleted ?? "?"} nodes · ${data.ontology_edges ?? "?"} ontology edges`
+          : "Reset failed",
+      );
+    } catch {
+      setSeedNote("Reset failed");
+    }
+    setResetting(false);
   }
 
   // On the finding screen the match is the headline. Auto-focus the match
@@ -137,6 +168,15 @@ export function DevPanel() {
             title="Wipe every node and edge tagged demo:true from Neo4j"
           >
             {clearing ? "Clearing…" : "Clear demo data"}
+          </button>
+          <button
+            type="button"
+            className="dev-panel__action dev-panel__action--danger"
+            onClick={resetDb}
+            disabled={resetting}
+            title="DESTRUCTIVE — wipe the entire graph and rebuild schema + ontology with no users (for fresh real-data collection)"
+          >
+            {resetting ? "Resetting…" : "Reset DB"}
           </button>
           <button
             type="button"
