@@ -38,7 +38,10 @@ Return a strict JSON object with exactly these fields.
 
 5) activity_types — 2–6 style descriptors from what they said (e.g. "low-pressure first meeting", "outdoors").
 
-6) availability — tokens ONLY from: "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible". Only what they clearly said.
+6) availability — tokens ONLY from: "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible".
+   - NEVER propose a SPECIFIC day/time slot ("thursday-evening", "friday-morning") unless they name that exact day directly (e.g. "Thursdays work", "Friday mornings"). Do not infer a specific day from vague hints like "some evenings" or "when I'm free".
+   - For vague or general availability, use only a general token ("weekday-evenings", "every-weekend") or "flexible".
+   - If they don't clearly state when they're free, return [] — do not guess. Never invent a specific day.
 
 7) commitment — one token from: "try-once", "maybe-weekly", "regular-thing", "open-ended", or "" if unclear.
 
@@ -67,7 +70,7 @@ Generate at least ONE grounded activity per topic where a real Rotterdam meetup 
 Each activity:
 - title: action-oriented, 2–6 words
 - description: one short sentence
-- day, time, duration: realistic; use reasonable defaults only for scheduling if not mentioned
+- day, time: ONLY if the speaker mentioned a day or timing preference; otherwise leave them as "" (open — the user picks when). Never invent a specific day/time they didn't state. duration: a realistic estimate is fine.
 - location_area: Rotterdam area
 - exact_venue: plausible specific venue
 - group_size_target: integer 3–6

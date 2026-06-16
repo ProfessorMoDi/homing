@@ -11,8 +11,8 @@ You'll receive a list of topics the user cares about (each with a title, explana
 Output an object: { activities: [...] }. Generate exactly 3 to 5 diverse, grounded activity suggestions — pick different topics where possible so the user feels understood without overwhelming them. Never invent a topic they didn't give. Each activity is:
 - title: action-oriented, 2–6 words (e.g. "Start a Catan round", "Slow Saturday photo walk", "Cook a new dish together")
 - description: one short sentence about what would happen
-- day: realistic day of week (e.g. "Thursday", "Saturday")
-- time: realistic 24-hour time (e.g. "19:30", "14:00")
+- day: the day ONLY if the user mentioned a day or timing preference (in their transcript or availability). Otherwise return "" — leave it open for the user to choose. Never invent a specific day they didn't ask for.
+- time: the time ONLY if the user mentioned a timing preference. Otherwise return "". An open, unscheduled activity is fine and preferred when timing was not stated.
 - duration: in plain words (e.g. "1.5 hours", "2 hours")
 - location_area: a Rotterdam-context area ("Near EUR campus", "Kralingen", "Centrum", "Delfshaven", "Noord", "Hillegersberg")
 - exact_venue: a specific plausible spot inside that area (a café, park, square, studio, etc.). Keep it short.
