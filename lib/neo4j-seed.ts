@@ -11,7 +11,7 @@ const TIME_SLOTS = [
   { id: "every-weekend",    label: "Every Weekend" },
   { id: "weekday-evenings", label: "Weekday Evenings" },
   { id: "thursday-evening", label: "Thursday Evening" },
-  { id: "friday-morning",   label: "Friday Morning" },
+  { id: "weekday-daytime",  label: "Weekday Daytime" },
   { id: "flexible",         label: "Flexible" },
 ];
 
@@ -288,14 +288,25 @@ export async function upsertActivity(tx: ManagedTransaction, activity: Activity)
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function deriveTimeSlots(day: string, time: string): string[] {
-  const d = day.toLowerCase();
+  // `day` may be an ISO date (from the activity date picker) or a weekday word
+  // (legacy / LLM). Normalize to a weekday name for the checks below.
+  let d = day.toLowerCase();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+    const date = new Date(`${day}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) {
+      d = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+    }
+  }
   const t = time.toLowerCase();
   const slots: string[] = [];
 
   if (d.includes("thursday")) slots.push("thursday-evening");
-  // friday-morning: only if time is before 13:00 (morning slot)
-  if (d.includes("friday") && /morning|\bam\b|^0[0-9]:|^1[0-2]:/.test(t))
-    slots.push("friday-morning");
+  // weekday-daytime: a weekday activity in the morning/daytime (before 13:00)
+  if (
+    /monday|tuesday|wednesday|thursday|friday/.test(d) &&
+    /morning|\bam\b|^0[0-9]:|^1[0-2]:/.test(t)
+  )
+    slots.push("weekday-daytime");
   if (d.includes("saturday") || d.includes("sunday"))
     slots.push("every-weekend");
   // Thursday is already its own slot — don't double-tag as weekday-evenings

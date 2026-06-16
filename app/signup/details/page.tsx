@@ -23,7 +23,7 @@ const AVAIL = [
   ["every-weekend", "Every weekend"],
   ["weekday-evenings", "Weekday evenings"],
   ["thursday-evening", "Thursday evening"],
-  ["friday-morning", "Friday morning until 15:00"],
+  ["weekday-daytime", "Weekday daytime"],
   ["flexible", "Flexible"],
 ] as const;
 

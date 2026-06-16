@@ -117,12 +117,43 @@ export function formatDuration(raw: string | undefined | null): string {
   return `${h} hr ${m} min`;
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Today as YYYY-MM-DD, for date-input `min`. */
+export function isoToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Value for an <input type="date"> — only ISO dates populate it; a weekday
+ *  word (e.g. "Thursday") or empty stays blank so the user picks a real date. */
+export function toDateInputValue(day: string | undefined | null): string {
+  return day && ISO_DATE.test(day) ? day : "";
+}
+
+/** Friendly day label: an ISO date → "Sat, 21 Jun"; anything else (a weekday
+ *  word) passes through unchanged. */
+export function formatDay(day: string | undefined | null): string {
+  if (!day) return "";
+  if (ISO_DATE.test(day)) {
+    const d = new Date(`${day}T00:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-GB", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      });
+    }
+  }
+  return day;
+}
+
 export function formatDayTime(day: string, time: string): string {
   const t = formatTime(time);
-  if (!day && !t) return "";
-  if (!t) return day;
-  if (!day) return t;
-  return `${day} at ${t}`;
+  const d = formatDay(day);
+  if (!d && !t) return "";
+  if (!t) return d;
+  if (!d) return t;
+  return `${d} at ${t}`;
 }
 
 export function formatTimeRange(

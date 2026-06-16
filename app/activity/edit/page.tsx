@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { AppShell, Section } from "@/components/AppShell";
 import { Label, PrimaryButton, SecondaryButton, ChipToggle } from "@/components/Bits";
 import { useApp } from "@/lib/store";
+import { formatTime, isoToday, toDateInputValue } from "@/lib/formatActivity";
 
 const ENERGY = [
   "Low-pressure / structured",
@@ -108,18 +109,21 @@ export default function EditActivity() {
       <Section title="When">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Day</Label>
+            <Label>Date</Label>
             <input
+              type="date"
               className="field"
-              value={a.day}
+              value={toDateInputValue(a.day)}
+              min={isoToday()}
               onChange={(e) => setActivity({ day: e.target.value })}
             />
           </div>
           <div>
             <Label>Time</Label>
             <input
+              type="time"
               className="field"
-              value={a.time}
+              value={formatTime(a.time)}
               onChange={(e) => setActivity({ time: e.target.value })}
             />
           </div>

@@ -11,7 +11,7 @@ const AVAIL_LABELS: Record<string, string> = {
   "every-weekend": "Every weekend",
   "weekday-evenings": "Weekday evenings",
   "thursday-evening": "Thursday evening",
-  "friday-morning": "Friday morning",
+  "weekday-daytime": "Weekday daytime",
   "flexible": "Flexible",
 };
 

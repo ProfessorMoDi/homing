@@ -9,7 +9,7 @@ export type Availability =
   | "every-weekend"
   | "weekday-evenings"
   | "thursday-evening"
-  | "friday-morning"
+  | "weekday-daytime"
   | "flexible";
 
 export type Commitment =

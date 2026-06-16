@@ -38,9 +38,9 @@ Return a strict JSON object with exactly these fields.
 
 5) activity_types — 2–6 style descriptors from what they said (e.g. "low-pressure first meeting", "outdoors").
 
-6) availability — tokens ONLY from: "every-weekend", "weekday-evenings", "thursday-evening", "friday-morning", "flexible".
-   - NEVER propose a SPECIFIC day/time slot ("thursday-evening", "friday-morning") unless they name that exact day directly (e.g. "Thursdays work", "Friday mornings"). Do not infer a specific day from vague hints like "some evenings" or "when I'm free".
-   - For vague or general availability, use only a general token ("weekday-evenings", "every-weekend") or "flexible".
+6) availability — tokens ONLY from: "every-weekend", "weekday-evenings", "thursday-evening", "weekday-daytime", "flexible".
+   - NEVER propose the SPECIFIC slot "thursday-evening" unless they name Thursday directly. Do not infer a specific day from vague hints like "some evenings" or "when I'm free".
+   - For vague or general availability, use only a general token ("weekday-evenings", "weekday-daytime", "every-weekend") or "flexible".
    - If they don't clearly state when they're free, return [] — do not guess. Never invent a specific day.
 
 7) commitment — one token from: "try-once", "maybe-weekly", "regular-thing", "open-ended", or "" if unclear.
@@ -144,7 +144,7 @@ const AVAILABILITY_TOKENS = new Set([
   "every-weekend",
   "weekday-evenings",
   "thursday-evening",
-  "friday-morning",
+  "weekday-daytime",
   "flexible",
 ]);
 const COMMITMENT_TOKENS = new Set([
