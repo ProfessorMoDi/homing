@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
         exists: true as const,
         profile: {
           first_name: (u.first_name as string) ?? "",
+          last_name: (u.last_name as string) ?? "",
           gender: (u.gender as string) ?? "",
           postcode: (u.postcode as string) ?? "",
           neighbourhood: (u.neighbourhood as string) ?? "",

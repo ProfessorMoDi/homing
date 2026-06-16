@@ -72,6 +72,7 @@ import { normalizeActivity } from "./formatActivity";
 
 interface Signup {
   first_name: string;
+  last_name: string;
   email: string;
   age: number | null;
   gender: string;
@@ -124,6 +125,7 @@ interface State {
 const initialState: State = {
   signup: {
     first_name: "",
+    last_name: "",
     email: "",
     age: null,
     gender: "",
@@ -999,6 +1001,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signup: {
         ...s.signup,
         first_name: p.first_name || s.signup.first_name,
+        last_name: p.last_name || s.signup.last_name,
         gender: p.gender || s.signup.gender,
         postcode: p.postcode || s.signup.postcode,
         commitment: p.commitment || s.signup.commitment,

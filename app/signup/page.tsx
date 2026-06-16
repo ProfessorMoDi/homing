@@ -27,8 +27,8 @@ function GoogleIcon() {
 
 function magicLinkErrorMessage(e: unknown, authReady: boolean): string {
   const code = (e as { code?: string }).code || "";
-  if (code === "auth/unauthorized-continue-uri") {
-    return "This URL isn't authorized in Firebase yet. Use the production site, or add this domain under Firebase → Authentication → Settings → Authorized domains.";
+  if (code === "auth/unauthorized-continue-uri" || code === "auth/unauthorized-domain") {
+    return "This web address isn't authorized in Firebase. Open the app on its production domain, or add this exact domain under Firebase → Authentication → Settings → Authorized domains.";
   }
   if (code === "auth/operation-not-allowed") {
     return "Email link sign-in isn't enabled. In Firebase Console → Authentication → Sign-in method, turn on Email/Password and Email link (passwordless).";
@@ -36,10 +36,15 @@ function magicLinkErrorMessage(e: unknown, authReady: boolean): string {
   if (code === "auth/configuration-not-found") {
     return "Firebase Authentication isn't enabled for this project yet. Open Firebase Console → Authentication → Get started.";
   }
+  if (code === "auth/too-many-requests" || code === "auth/quota-exceeded") {
+    return "Firebase's email sender hit its daily limit. Try Google sign-in for now, or set up custom SMTP in Firebase.";
+  }
   if (!authReady) {
     return "Sign-in isn't configured on this deployment (missing NEXT_PUBLIC_FIREBASE_* env vars).";
   }
-  return "We couldn't send your sign-in link. Check the email and try again.";
+  return code
+    ? `We couldn't send your sign-in link (${code}). Check the email and try again.`
+    : "We couldn't send your sign-in link. Check the email and try again.";
 }
 
 export default function SignUp() {
@@ -82,9 +87,13 @@ export default function SignUp() {
     exitDemoSession();
     commitSignup();
     try {
-      // Write the Firebase Auth user (with display name) now, so the account
-      // exists immediately — not only if/when the magic-link email is clicked.
-      await registerAccount(s.email, s.first_name);
+      // Write the Firebase Auth user (with full display name) now, so the
+      // account exists immediately — not only if/when the link is clicked.
+      const fullName = [s.first_name, s.last_name]
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .join(" ");
+      await registerAccount(s.email, fullName);
       await sendMagicLink(s.email);
       try {
         sessionStorage.setItem(SIGNUP_LINK_SENT_KEY, s.email);
@@ -108,9 +117,11 @@ export default function SignUp() {
     try {
       const user = await signInWithGoogle();
       const email = user.email || s.email;
+      const parts = (user.displayName || "").trim().split(/\s+/).filter(Boolean);
       setSignup({
         email,
-        first_name: s.first_name || user.displayName?.split(" ")[0] || "",
+        first_name: s.first_name || parts[0] || "",
+        last_name: s.last_name || parts.slice(1).join(" "),
       });
       // Returning Google account → skip onboarding, open the events page.
       // Prefer local session, else reload from the graph.
@@ -129,7 +140,13 @@ export default function SignUp() {
       const code = (e as { code?: string }).code || "";
       if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
         console.error("google sign-in failed", e);
-        setError("Google sign-in didn't complete. Please try again.");
+        setError(
+          code === "auth/unauthorized-domain"
+            ? "This web address isn't authorized in Firebase. Open the app on its production domain, or add this domain under Firebase → Authentication → Settings → Authorized domains."
+            : code === "auth/operation-not-allowed"
+              ? "Google sign-in isn't enabled in Firebase Console → Authentication → Sign-in method."
+              : `Google sign-in didn't complete${code ? ` (${code})` : ""}. Please try again.`,
+        );
       }
       setBusy(false);
     }
@@ -171,17 +188,26 @@ export default function SignUp() {
             />
           </div>
           <div>
-            <Label>Age</Label>
+            <Label>Last name</Label>
             <input
-              inputMode="numeric"
               className="field"
-              placeholder="23"
-              value={s.age ?? ""}
-              onChange={(e) =>
-                setSignup({ age: e.target.value ? Number(e.target.value) : null })
-              }
+              placeholder="de Vries"
+              value={s.last_name}
+              onChange={(e) => setSignup({ last_name: e.target.value })}
             />
           </div>
+        </div>
+        <div>
+          <Label>Age</Label>
+          <input
+            inputMode="numeric"
+            className="field"
+            placeholder="23"
+            value={s.age ?? ""}
+            onChange={(e) =>
+              setSignup({ age: e.target.value ? Number(e.target.value) : null })
+            }
+          />
         </div>
         {!ready && (
           <div className="card-outline p-3 flex items-start gap-2 border-[var(--color-clay)]">

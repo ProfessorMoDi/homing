@@ -14,6 +14,7 @@ import {
 
 export interface SignupSnapshot {
   first_name: string;
+  last_name: string;
   email: string;
   age: number | null;
   gender: string;
@@ -49,6 +50,7 @@ export function buildSignupSync(
     id: ctx.id,
     demo: ctx.demo,
     first_name: sig.first_name || undefined,
+    last_name: sig.last_name || undefined,
     email: sig.email || undefined,
     age: sig.age ?? undefined,
     gender: sig.gender || undefined,

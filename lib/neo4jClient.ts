@@ -29,6 +29,7 @@ export interface SignupSync {
   id: string;
   demo: boolean;
   first_name?: string;
+  last_name?: string;
   email?: string;
   age?: number | null;
   gender?: string;
@@ -255,6 +256,7 @@ export interface GraphUserData {
   exists: boolean;
   profile?: {
     first_name: string;
+    last_name: string;
     gender: string;
     postcode: string;
     neighbourhood: string;

@@ -20,6 +20,7 @@ export interface UserPatch {
   id: string;
   demo?: boolean;
   first_name?: string;
+  last_name?: string;
   email?: string;
   age?: number | null;
   gender?: string;
@@ -46,7 +47,7 @@ export async function patchUser(
   const fieldsToSet: Record<string, unknown> = { updated_at: now };
 
   const stringFields: Array<keyof UserPatch> = [
-    "first_name", "email", "gender", "gender_preference",
+    "first_name", "last_name", "email", "gender", "gender_preference",
     "postcode", "language_other", "commitment_appetite",
     "verification_status",
   ];
