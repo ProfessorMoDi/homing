@@ -82,3 +82,58 @@ export async function verifyIdToken(
     return null;
   }
 }
+
+/** Authoritative "does this email have an account?" via the Admin SDK — works
+ *  even with email enumeration protection on (unlike the client method).
+ *  Returns false when admin isn't configured (caller treats as "unknown"). */
+export async function authUserExists(email: string): Promise<boolean> {
+  const app = adminApp();
+  if (!app || !email) return false;
+  try {
+    await getAuth(app).getUserByEmail(email.trim().toLowerCase());
+    return true;
+  } catch {
+    return false; // user-not-found (or error) → treat as not existing
+  }
+}
+
+/** Create the Firebase Auth user if missing, or refresh its display name, so a
+ *  signup writes a real account immediately — independent of whether the magic
+ *  link email is ever delivered/clicked. Returns the uid, or null if admin
+ *  isn't configured. Never throws. */
+export async function upsertAuthUser(opts: {
+  email: string;
+  displayName?: string;
+}): Promise<string | null> {
+  const app = adminApp();
+  if (!app) return null;
+  const email = opts.email.trim().toLowerCase();
+  if (!email) return null;
+  const displayName = opts.displayName?.trim() || undefined;
+  const auth = getAuth(app);
+  try {
+    const existing = await auth.getUserByEmail(email);
+    if (displayName && existing.displayName !== displayName) {
+      await auth.updateUser(existing.uid, { displayName });
+    }
+    return existing.uid;
+  } catch {
+    // Not found (or transient) — try to create.
+    try {
+      const created = await auth.createUser({
+        email,
+        emailVerified: false,
+        ...(displayName ? { displayName } : {}),
+      });
+      return created.uid;
+    } catch (err) {
+      // e.g. a race created it between get and create — fall back to a lookup.
+      try {
+        return (await auth.getUserByEmail(email)).uid;
+      } catch {
+        console.error("[firebaseAdmin] upsertAuthUser failed", err);
+        return null;
+      }
+    }
+  }
+}

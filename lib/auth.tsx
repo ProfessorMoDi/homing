@@ -19,7 +19,6 @@ import {
   useState,
 } from "react";
 import {
-  fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   isSignInWithEmailLink,
   onAuthStateChanged,
@@ -43,12 +42,18 @@ interface AuthCtx {
   pendingEmail: string | null;
   sendMagicLink: (email: string) => Promise<void>;
   /**
-   * True when the email already has a Firebase account (any sign-in method).
-   * Returns false when it can't tell — Firebase "email enumeration protection",
-   * when enabled, makes this always report no methods, so callers must treat a
-   * false as "unknown / proceed", never as a hard "definitely new".
+   * True when the email already has a Firebase account. Checked server-side via
+   * the Admin SDK, so it's reliable even with email enumeration protection on.
+   * Returns false when it can't tell (admin unconfigured / error) — callers
+   * treat false as "proceed", never a hard "definitely new".
    */
   emailHasAccount: (email: string) => Promise<boolean>;
+  /**
+   * Create the Firebase Auth user (with display name) up front, so a signup
+   * writes a real account immediately instead of only when the magic link is
+   * clicked. No-op if the Admin SDK isn't configured. Never throws.
+   */
+  registerAccount: (email: string, firstName?: string) => Promise<void>;
   /** Completes a magic-link sign-in from the current URL. Returns the email. */
   completeMagicLink: (emailOverride?: string) => Promise<string>;
   isMagicLinkUrl: () => boolean;
@@ -91,19 +96,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const emailHasAccount = useCallback(
     async (email: string): Promise<boolean> => {
-      if (!ready) return false;
       const clean = email.trim().toLowerCase();
       if (!clean) return false;
       try {
-        const methods = await fetchSignInMethodsForEmail(getFirebaseAuth(), clean);
-        return methods.length > 0;
+        const r = await fetch(
+          `/api/auth/account?email=${encodeURIComponent(clean)}`,
+        );
+        if (!r.ok) return false;
+        const data = (await r.json()) as { exists?: boolean; configured?: boolean };
+        return data.configured === true && data.exists === true;
       } catch {
-        // Network/config error or enumeration protection — can't tell, so let
-        // the caller proceed as if new (no false "account exists" blocks).
         return false;
       }
     },
-    [ready],
+    [],
+  );
+
+  const registerAccount = useCallback(
+    async (email: string, firstName?: string): Promise<void> => {
+      const clean = email.trim().toLowerCase();
+      if (!clean) return;
+      try {
+        await fetch("/api/auth/account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: clean, first_name: firstName }),
+        });
+      } catch {
+        // fail-soft: magic link still creates the account on click
+      }
+    },
+    [],
   );
 
   const isMagicLinkUrl = useCallback(() => {
@@ -152,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pendingEmail,
         sendMagicLink,
         emailHasAccount,
+        registerAccount,
         completeMagicLink,
         isMagicLinkUrl,
         signInWithGoogle,

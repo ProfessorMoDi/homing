@@ -44,7 +44,8 @@ function magicLinkErrorMessage(e: unknown, authReady: boolean): string {
 
 export default function SignUp() {
   const { state, setSignup, commitSignup, hydrateFromGraph } = useApp();
-  const { ready, sendMagicLink, emailHasAccount, signInWithGoogle } = useAuth();
+  const { ready, sendMagicLink, emailHasAccount, registerAccount, signInWithGoogle } =
+    useAuth();
   const router = useRouter();
   const s = state.signup;
 
@@ -81,6 +82,9 @@ export default function SignUp() {
     exitDemoSession();
     commitSignup();
     try {
+      // Write the Firebase Auth user (with display name) now, so the account
+      // exists immediately — not only if/when the magic-link email is clicked.
+      await registerAccount(s.email, s.first_name);
       await sendMagicLink(s.email);
       try {
         sessionStorage.setItem(SIGNUP_LINK_SENT_KEY, s.email);
