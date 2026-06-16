@@ -128,6 +128,10 @@ export default function Finding() {
   const target = a.group_size_target;
   const ready = accepted >= a.minimum_group_size;
   const stagesDone = stage >= stages.length;
+  // The search has settled (graph returned, animation finished) but not enough
+  // people accepted to form the group — show a clear outcome + a way home
+  // instead of an endless "Group is forming".
+  const notEnough = !matchLoading && stagesDone && !ready;
 
   const topMatches = matches.filter((m) => !m.excluded).slice(0, 6);
 
@@ -272,7 +276,7 @@ export default function Finding() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-[var(--color-ink)]">
-                      {m.user.first_name}
+                      {m.user.first_name || "HOMING member"}
                       {isInvited ? (
                         <span className="text-[var(--color-muted)] font-normal">
                           {" "}
@@ -315,25 +319,45 @@ export default function Finding() {
         </div>
       </Card>
 
-      <PrimaryButton
-        onClick={() => router.push("/activity/verify")}
-        disabled={!ready || matchLoading}
-      >
-        {matchLoading ? (
-          <>
-            Matching on the graph <ThinkingDots size="small" />
-          </>
-        ) : ready ? (
-          "Continue to verification"
-        ) : (
-          <>
-            Group is forming <ThinkingDots size="small" />
-          </>
-        )}
-      </PrimaryButton>
-      <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
-        Names and photos stay hidden until everyone verifies.
-      </p>
+      {notEnough ? (
+        <>
+          <div className="card-outline p-4 mb-3 text-center">
+            <p className="text-[14px] font-medium mb-1">
+              Not enough people yet
+            </p>
+            <p className="text-[13px] text-[var(--color-ink-soft)] leading-relaxed">
+              Unfortunately we couldn&apos;t find enough people for this activity
+              right now. It&apos;s saved — Homi keeps looking as more people join
+              the flock.
+            </p>
+          </div>
+          <PrimaryButton onClick={() => router.push("/")}>
+            Return to the home screen
+          </PrimaryButton>
+        </>
+      ) : (
+        <>
+          <PrimaryButton
+            onClick={() => router.push("/activity/verify")}
+            disabled={!ready || matchLoading}
+          >
+            {matchLoading ? (
+              <>
+                Matching on the graph <ThinkingDots size="small" />
+              </>
+            ) : ready ? (
+              "Continue to verification"
+            ) : (
+              <>
+                Group is forming <ThinkingDots size="small" />
+              </>
+            )}
+          </PrimaryButton>
+          <p className="text-[12px] text-[var(--color-muted)] text-center mt-3">
+            Names and photos stay hidden until everyone verifies.
+          </p>
+        </>
+      )}
     </AppShell>
   );
 }

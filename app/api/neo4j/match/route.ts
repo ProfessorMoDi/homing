@@ -142,9 +142,10 @@ export async function POST(req: NextRequest) {
         .map((p) => normalizePath(p))
         .filter((p): p is PathRecord => p !== null)
         .sort((a, b) => b.weight - a.weight || b.rarity - a.rarity);
+      const userId = r.get("user_id") as string;
       return {
-        user_id: r.get("user_id") as string,
-        first_name: r.get("first_name") as string,
+        user_id: userId,
+        first_name: memberLabel(r.get("first_name") as string | null, userId),
         neighbourhood: (r.get("neighbourhood") as string) ?? "",
         score: toNumber(r.get("score")),
         breakdown: {
@@ -167,6 +168,18 @@ function toNumber(v: unknown): number {
   if (v && typeof (v as { toNumber?: () => number }).toNumber === "function")
     return (v as { toNumber: () => number }).toNumber();
   return Number(v) || 0;
+}
+
+// Never return a blank name to the UI — fall back to a derived label so an
+// invite card always shows something instead of just a score/dot.
+function memberLabel(firstName: string | null | undefined, userId: string): string {
+  const name = firstName?.trim();
+  if (name) return name;
+  const slug = userId.replace(/^u_/, "").replace(/-/g, " ").trim();
+  if (slug && slug !== "demo" && slug !== "anon") {
+    return slug.charAt(0).toUpperCase() + slug.slice(1);
+  }
+  return "HOMING member";
 }
 
 function normalizePath(raw: unknown): PathRecord | null {
