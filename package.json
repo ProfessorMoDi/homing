@@ -13,7 +13,6 @@
     "@neo4j-nvl/interaction-handlers": "^1.1.0",
     "@neo4j-nvl/react": "^1.1.0",
     "firebase": "^12.14.0",
-    "firebase-admin": "^14.0.0",
     "lucide-react": "^0.469.0",
     "neo4j-driver": "^6.0.1",
     "next": "^15.5.18",
