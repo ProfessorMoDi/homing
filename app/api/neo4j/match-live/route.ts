@@ -64,6 +64,7 @@ WITH u,
 
 RETURN u.id            AS user_id,
        u.first_name    AS first_name,
+       coalesce(u.share_name_with_similar, false) AS share_name,
        u.neighbourhood AS neighbourhood,
        toInteger(interest_score) AS interest_score,
        base_score,
@@ -123,9 +124,14 @@ export async function POST(req: NextRequest) {
           .filter((p) => p.weight >= 0.999 && p.rarity >= 1.45)
           .map((p) => p.via_title),
       );
+      // Each person's OWN consent governs whether their first name is shown
+      // here. If they didn't opt in, they stay an anonymous "HOMING member".
+      const sharesName = r.get("share_name") === true;
       return {
         user_id: userId,
-        first_name: memberLabel(r.get("first_name") as string | null, userId),
+        first_name: sharesName
+          ? memberLabel(r.get("first_name") as string | null, userId)
+          : "HOMING member",
         neighbourhood: (r.get("neighbourhood") as string) ?? "",
         score: interest,
         base_score: base,

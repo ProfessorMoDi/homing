@@ -18,7 +18,6 @@ import { incomingInviteActivity } from "@/lib/matching";
 import type { Activity } from "@/lib/types";
 import { useApp } from "@/lib/store";
 import { formatDayTime, formatDuration } from "@/lib/formatActivity";
-import { sharedName } from "@/lib/identity";
 import { useAppMode } from "@/lib/useAppMode";
 import { pipelineStageLabel } from "@/lib/voicePipeline";
 import { ThinkingDots } from "@/components/Loading";
@@ -375,10 +374,8 @@ export default function Suggestions() {
             Who is similar to you?
           </h2>
           <p className="text-[12px] text-[var(--color-muted)] mb-3">
-            Optional — people in the network who share your interests.
-            {state.shareNameWithSimilar === false && similarPeople.length > 0 && (
-              <> You chose to stay anonymous, so names are hidden both ways.</>
-            )}
+            Optional — people in the network who share your interests. Names
+            show for people who chose to share theirs.
           </p>
           {peopleLoading ? (
             <div className="grid gap-3">
@@ -400,9 +397,7 @@ export default function Suggestions() {
                   <Card key={p.user_id}>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="display text-[17px]">
-                          {sharedName(p.first_name, state.shareNameWithSimilar)}
-                        </p>
+                        <p className="display text-[17px]">{p.first_name}</p>
                         <p className="text-[12.5px] text-[var(--color-muted)]">
                           {p.neighbourhood}
                         </p>

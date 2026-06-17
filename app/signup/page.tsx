@@ -87,13 +87,10 @@ export default function SignUp() {
     exitDemoSession();
     commitSignup();
     try {
-      // Write the Firebase Auth user (with full display name) now, so the
-      // account exists immediately — not only if/when the link is clicked.
-      const fullName = [s.first_name, s.last_name]
-        .map((n) => n.trim())
-        .filter(Boolean)
-        .join(" ");
-      await registerAccount(s.email, fullName);
+      // Write the Firebase Auth user now, so the account exists immediately —
+      // not only if/when the link is clicked. Display name is the FIRST name
+      // only (we only ever show first names); the last name is saved in Neo4j.
+      await registerAccount(s.email, s.first_name);
       await sendMagicLink(s.email);
       try {
         sessionStorage.setItem(SIGNUP_LINK_SENT_KEY, s.email);

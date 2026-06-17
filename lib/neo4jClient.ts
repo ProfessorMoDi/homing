@@ -42,6 +42,7 @@ export interface SignupSync {
   languages_comfortable?: string[];
   availability?: string[];
   profile_completed?: boolean;
+  share_name_with_similar?: boolean;
 }
 
 export async function syncSignup(patch: SignupSync): Promise<void> {

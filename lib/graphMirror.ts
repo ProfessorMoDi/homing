@@ -28,6 +28,8 @@ export interface SignupSnapshot {
 
 export interface GraphMirrorSnapshot {
   signup: SignupSnapshot;
+  /** Consent to show first name to similar people (null = not yet asked). */
+  shareNameWithSimilar: boolean | null;
   transcript: string;
   detectedLanguage: string | null;
   languageConfidence: LanguageConfidence;
@@ -63,6 +65,8 @@ export function buildSignupSync(
       ? sig.languages_comfortable
       : undefined,
     availability: sig.availability.length ? sig.availability : undefined,
+    share_name_with_similar:
+      snap.shareNameWithSimilar === null ? undefined : snap.shareNameWithSimilar,
     ...(opts.profileCompleted ? { profile_completed: true } : {}),
   };
 }
@@ -137,6 +141,7 @@ export async function mirrorUserGraph(
 
 export function snapshotFromState(state: {
   signup: SignupSnapshot;
+  shareNameWithSimilar: boolean | null;
   transcript: string;
   detectedLanguage: string | null;
   languageConfidence: LanguageConfidence;
@@ -150,6 +155,7 @@ export function snapshotFromState(state: {
 }): GraphMirrorSnapshot {
   return {
     signup: state.signup,
+    shareNameWithSimilar: state.shareNameWithSimilar,
     transcript: state.transcript,
     detectedLanguage: state.detectedLanguage,
     languageConfidence: state.languageConfidence,

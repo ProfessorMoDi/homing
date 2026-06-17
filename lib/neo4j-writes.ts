@@ -31,6 +31,7 @@ export interface UserPatch {
   commitment_appetite?: string;
   verification_status?: string;
   profile_completed?: boolean;
+  share_name_with_similar?: boolean;
   languages_spoken?: string[];
   languages_comfortable?: string[];
   availability?: string[];
@@ -58,6 +59,9 @@ export async function patchUser(
     }
   }
   if (typeof patch.age === "number") fieldsToSet.age = patch.age;
+  if (typeof patch.share_name_with_similar === "boolean") {
+    fieldsToSet.share_name_with_similar = patch.share_name_with_similar;
+  }
   if (typeof patch.profile_completed === "boolean") {
     fieldsToSet.profile_completed = patch.profile_completed;
   }
