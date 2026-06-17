@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "email required" }, { status: 400 });
   }
   const exists = await authUserExists(email);
-  return NextResponse.json({ exists, configured: isAdminConfigured() });
+  return NextResponse.json({ exists, configured: await isAdminConfigured() });
 }
 
 export async function POST(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!email) {
     return NextResponse.json({ error: "email required" }, { status: 400 });
   }
-  if (!isAdminConfigured()) {
+  if (!(await isAdminConfigured())) {
     // No Admin SDK here — nothing to write. Report so the client can fall back
     // to the magic-link-only flow (account created on link click).
     return NextResponse.json({ ok: false, configured: false });

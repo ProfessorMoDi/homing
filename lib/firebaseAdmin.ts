@@ -1,28 +1,22 @@
-// Server-only Firebase Admin singleton — used to verify Firebase ID tokens so
-// API routes can prove who is calling before returning or mutating a user's
-// personal data. NEVER import this from client code; it holds a private key.
+// Server-only Firebase Admin access. NEVER import from client code — it holds
+// a private key.
 //
-// Credential resolution (first hit wins):
-//   1. FIREBASE_SERVICE_ACCOUNT_KEY — the service-account JSON as a string.
-//      This is what production (Vercel) should use; the JSON file is gitignored
-//      and never deployed.
-//   2. FIREBASE_SERVICE_ACCOUNT_PATH / GOOGLE_APPLICATION_CREDENTIALS — a path
-//      to the JSON file (handy for local dev).
-//   3. The default local filename in the project root (dev convenience).
+// firebase-admin is loaded with a DYNAMIC import() rather than a static one.
+// Next compiles a static `import` in a route into CommonJS `require()`, and
+// firebase-admin (v14) resolves to ESM on Vercel's serverless runtime, so
+// `require()` of it throws "require() of ES Module" and crashes the whole
+// route module (a hard 500 on every request, even ones that don't use admin).
+// A dynamic import() uses the ESM loader and is wrapped in try/catch, so the
+// SDK loads when possible and degrades to "not configured" when it can't —
+// it never takes the route down.
 //
-// If no credential is found, isAdminConfigured() is false and verifyIdToken()
-// returns null — protected routes then fail closed (reject), so a missing key
-// degrades to "no access", never to "open access".
+// Credentials: FIREBASE_SERVICE_ACCOUNT_KEY (JSON string, used in prod) →
+// FIREBASE_SERVICE_ACCOUNT_PATH / GOOGLE_APPLICATION_CREDENTIALS → a local key
+// file. No credential → admin features no-op (fail closed for reads).
 
 import { readFileSync } from "node:fs";
-import {
-  cert,
-  getApps,
-  initializeApp,
-  type App,
-  type ServiceAccount,
-} from "firebase-admin/app";
-import { getAuth, type DecodedIdToken } from "firebase-admin/auth";
+import type { ServiceAccount } from "firebase-admin/app";
+import type { Auth, DecodedIdToken } from "firebase-admin/auth";
 
 const DEFAULT_KEY_FILE =
   "homing-app-40894-firebase-adminsdk-fbsvc-afe8486fad.json";
@@ -48,69 +42,67 @@ function loadServiceAccount(): ServiceAccount | null {
   }
 }
 
-let cached: App | null | undefined;
+let authPromise: Promise<Auth | null> | undefined;
 
-function adminApp(): App | null {
-  if (cached !== undefined) return cached;
-  if (getApps().length > 0) {
-    cached = getApps()[0];
-    return cached;
-  }
-  const credential = loadServiceAccount();
-  if (!credential) {
-    cached = null;
-    return cached;
-  }
-  cached = initializeApp({ credential: cert(credential) });
-  return cached;
+function getAdminAuth(): Promise<Auth | null> {
+  if (authPromise !== undefined) return authPromise;
+  authPromise = (async () => {
+    try {
+      const { cert, getApps, initializeApp } = await import("firebase-admin/app");
+      const { getAuth } = await import("firebase-admin/auth");
+      const existing = getApps();
+      const app = existing.length
+        ? existing[0]
+        : (() => {
+            const credential = loadServiceAccount();
+            return credential ? initializeApp({ credential: cert(credential) }) : null;
+          })();
+      return app ? getAuth(app) : null;
+    } catch (err) {
+      console.error("[firebaseAdmin] admin SDK unavailable", err);
+      return null;
+    }
+  })();
+  return authPromise;
 }
 
-export function isAdminConfigured(): boolean {
-  return adminApp() !== null;
+export async function isAdminConfigured(): Promise<boolean> {
+  return (await getAdminAuth()) !== null;
 }
 
-/** Verify a Firebase ID token. Returns the decoded token, or null if invalid
- *  / expired / admin not configured. Never throws. */
-export async function verifyIdToken(
-  token: string,
-): Promise<DecodedIdToken | null> {
-  const app = adminApp();
-  if (!app || !token) return null;
+/** Verify a Firebase ID token. null if invalid / expired / admin unavailable. */
+export async function verifyIdToken(token: string): Promise<DecodedIdToken | null> {
+  const auth = await getAdminAuth();
+  if (!auth || !token) return null;
   try {
-    return await getAuth(app).verifyIdToken(token);
+    return await auth.verifyIdToken(token);
   } catch {
     return null;
   }
 }
 
-/** Authoritative "does this email have an account?" via the Admin SDK — works
- *  even with email enumeration protection on (unlike the client method).
- *  Returns false when admin isn't configured (caller treats as "unknown"). */
+/** Authoritative existence check via the Admin SDK. false when unavailable. */
 export async function authUserExists(email: string): Promise<boolean> {
-  const app = adminApp();
-  if (!app || !email) return false;
+  const auth = await getAdminAuth();
+  if (!auth || !email) return false;
   try {
-    await getAuth(app).getUserByEmail(email.trim().toLowerCase());
+    await auth.getUserByEmail(email.trim().toLowerCase());
     return true;
   } catch {
-    return false; // user-not-found (or error) → treat as not existing
+    return false;
   }
 }
 
-/** Create the Firebase Auth user if missing, or refresh its display name, so a
- *  signup writes a real account immediately — independent of whether the magic
- *  link email is ever delivered/clicked. Returns the uid, or null if admin
- *  isn't configured. Never throws. */
+/** Create the Auth user if missing / refresh its display name. uid or null. */
 export async function upsertAuthUser(opts: {
   email: string;
   displayName?: string;
 }): Promise<string | null> {
-  const app = adminApp();
-  if (!app) return null;
+  const auth = await getAdminAuth();
+  if (!auth) return null;
   const email = opts.email.trim().toLowerCase();
   if (!email) return null;
   const displayName = opts.displayName?.trim() || undefined;
-  const auth = getAuth(app);
   try {
     const existing = await auth.getUserByEmail(email);
     if (displayName && existing.displayName !== displayName) {
@@ -118,7 +110,6 @@ export async function upsertAuthUser(opts: {
     }
     return existing.uid;
   } catch {
-    // Not found (or transient) — try to create.
     try {
       const created = await auth.createUser({
         email,
@@ -127,7 +118,6 @@ export async function upsertAuthUser(opts: {
       });
       return created.uid;
     } catch (err) {
-      // e.g. a race created it between get and create — fall back to a lookup.
       try {
         return (await auth.getUserByEmail(email)).uid;
       } catch {
